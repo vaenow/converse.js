@@ -807,6 +807,7 @@
                     composing = $message.find('composing'),
                     delayed = $message.find('delay').length > 0,
                     fullname = this.get('fullname'),
+                    $xhtml = $message.children('html[xmlns="'+Strophe.NS.XHTML_IM+'"]'),
                     stamp, time, sender;
                 fullname = (_.isEmpty(fullname)? from: fullname).split(' ')[0];
 
@@ -837,7 +838,8 @@
                         sender: sender,
                         delayed: delayed,
                         time: time,
-                        message: body
+                        body: body,
+                        html: $xhtml.length > 0 ? $xhtml.html() : null
                     });
                 }
             },
@@ -891,7 +893,7 @@
             },
 
             initialize: function (){
-                this.model.messages.on('add', this.onMessageAdded, this);
+                this.model.messages.on('add', this.onMessageAdd, this);
                 this.model.on('show', this.show, this);
                 this.model.on('destroy', this.hide, this);
                 this.model.on('change', this.onChange, this);
@@ -900,10 +902,10 @@
                 this.model.on('showHelpMessages', this.showHelpMessages, this);
                 this.model.on('sendMessageStanza', this.sendMessageStanza, this);
                 this.model.on('showSentOTRMessage', function (text) {
-                    this.showMessage({'message': text, 'sender': 'me'});
+                    this.showMessage({'body': text, 'sender': 'me'});
                 }, this);
                 this.model.on('showReceivedOTRMessage', function (text) {
-                    this.showMessage({'message': text, 'sender': 'them'});
+                    this.showMessage({'body': text, 'sender': 'them'});
                 }, this);
 
                 this.updateVCard();
@@ -964,7 +966,8 @@
             showMessage: function (msg_dict) {
                 var $content = this.$el.find('.chat-content'),
                     msg_time = moment(msg_dict.time) || moment,
-                    text = msg_dict.message,
+                    text = msg_dict.body,
+                    html = msg_dict.html,
                     match = text.match(/^\/(.*?)(?: (.*))?$/),
                     fullname = msg_dict.fullname || this.model.get('fullname'), // XXX Perhaps always use model's?
                     template, username;
@@ -985,7 +988,13 @@
                     'message': '',
                     'extra_classes': msg_dict.delayed && 'delayed' || ''
                 });
-                $content.append($(message).children('.chat-message-content').first().text(text).addHyperlinks().addEmoticons().parent());
+                var $message = $(message);
+                if (!html) {
+                    $message.children('.chat-message-content').first().text(text).addHyperlinks().addEmoticons();
+                } else {
+                    $message.children('.chat-message-content').first().html(html).addEmoticons();
+                }
+                $content.append($message);
                 this.scrollDown();
             },
 
@@ -1003,7 +1012,7 @@
                 return this.scrollDown();
             },
 
-            onMessageAdded: function (message) {
+            onMessageAdd: function (message) {
                 var time = message.get('time'),
                     times = this.model.messages.pluck('time'),
                     previous_message, idx, this_date, prev_date, text, match;
@@ -1898,7 +1907,7 @@
 
             initialize: function () {
                 this.connect(null);
-                this.model.messages.on('add', this.onMessageAdded, this);
+                this.model.messages.on('add', this.onMessageAdd, this);
                 this.model.on('change:minimized', function (item) {
                     if (item.get('minimized')) {
                         this.hide();
@@ -2323,6 +2332,7 @@
             onChatRoomMessage: function (message) {
                 var $message = $(message),
                     body = $message.children('body').text(),
+                    $xhtml = $message.children('html[xmlns="'+Strophe.NS.XHTML_IM+'"]'),
                     jid = $message.attr('from'),
                     $chat_content = this.$el.find('.chat-content'),
                     resource = Strophe.getResourceFromJid(jid),
@@ -2361,10 +2371,11 @@
                 if (!body) { return true; }
                 var display_sender = sender === this.model.get('nick') && 'me' || 'room';
                 this.showMessage({
-                    'message': body,
-                    'sender': display_sender,
-                    'fullname': sender,
-                    'time': message_datetime.format()
+                    body: body,
+                    html: $xhtml.length > 0 ? $xhtml.html() : null,
+                    sender: display_sender,
+                    fullname: sender,
+                    time: message_datetime.format()
                 });
                 if (display_sender === 'room') {
                     // We only emit an event if it's not our own message
