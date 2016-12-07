@@ -15,10 +15,12 @@ require.config({
     baseUrl: '.',
     paths: {
         "almond":                   "node_modules/almond/almond",
+        "babel":                    "node_modules/requirejs-babel/babel-5.8.34.min",
         "backbone":                 "node_modules/backbone/backbone",
         "backbone.browserStorage":  "node_modules/backbone.browserStorage/backbone.browserStorage",
         "backbone.overview":        "node_modules/backbone.overview/backbone.overview",
         "converse":                 "src/converse",
+        "es6":                      "node_modules/requirejs-babel/es6",
         "eventemitter":             "node_modules/otr/build/dep/eventemitter",
         "jquery":                   "node_modules/jquery/dist/jquery",
         "jquery-private":           "src/jquery-private",

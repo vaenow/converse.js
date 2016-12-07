@@ -33,6 +33,8 @@
   },
   "devDependencies": {
     "almond": "~0.3.1",
+    "babel-cli": "^6.18.0",
+    "babel-preset-latest": "^6.16.0",
     "backbone": "1.3.3",
     "backbone.browserStorage": "0.0.3",
     "backbone.overview": "0.0.3",
@@ -56,9 +58,10 @@
     "pluggable.js": "0.0.2",
     "po2json": "^0.4.4",
     "requirejs": "2.3.2",
+    "requirejs-babel": "0.0.9",
     "requirejs-undertemplate": "~0.0.4",
-    "strophe.js": "https://github.com/strophe/strophejs#4eeee581da8789d7c5ae0096496f2a6533ec7d74",
     "snyk": "^1.21.2",
+    "strophe.js": "https://github.com/strophe/strophejs#4eeee581da8789d7c5ae0096496f2a6533ec7d74",
     "strophejs-plugins": "0.0.7",
     "text": "requirejs/text#2.0.15",
     "underscore": "~1.8.3"

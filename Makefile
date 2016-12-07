@@ -1,4 +1,5 @@
 # You can set these variables from the command line.
+BABEL			?= node_modules/.bin/babel
 BOWER           ?= node_modules/.bin/bower
 BUILDDIR        = ./docs
 BUNDLE          ?= ./.bundle/bin/bundle
@@ -144,6 +145,10 @@ css/mobile.min.css:: stamp-npm
 .PHONY: watch
 watch: stamp-bundler
 	$(SASS) --watch -I ./components/bourbon/app/assets/stylesheets/ sass/converse.scss:css/converse.css
+
+.PHONY: watchjs
+watchjs: stamp-bower
+	$(BABEL) --source-maps --watch=./src --out-dir=./build
 
 BUILDS = dist/converse.js \
 		 dist/converse.min.js \
