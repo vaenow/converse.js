@@ -168,9 +168,11 @@ require.config({
     map: {
         // '*' means all modules will get 'jquery-private'
         // for their 'jquery' dependency.
+        /*
         '*': {
             'jquery': 'jquery-private',
          },
+         */
         'backbone': {
             "underscore": "lodash"
          },

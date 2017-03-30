@@ -25,6 +25,7 @@
             tpl_roster_item) {
     "use strict";
     var $ = converse.env.jQuery,
+        sizzle = converse.env.sizzle,
         utils = converse.env.utils,
         Strophe = converse.env.Strophe,
         $iq = converse.env.$iq,
@@ -132,6 +133,7 @@
 
             _converse.RosterFilterView = Backbone.View.extend({
                 tagName: 'span',
+                className: 'hidden',
                 events: {
                     "keydown .roster-filter": "liveFilter",
                     "submit form.roster-filter-form": "submitFilter",
@@ -162,7 +164,7 @@
                             label_offline: __('Offline')
                         }));
                     this.renderClearButton();
-                    return this.$el;
+                    return this.el;
                 },
 
                 renderClearButton: function () {
@@ -278,7 +280,7 @@
 
                 render: function () {
                     this.renderRoster();
-                    this.$el.html(this.filter_view.render());
+                    this.el.innerHTML = this.filter_view.render().outerHTML;
                     if (!_converse.allow_contact_requests) {
                         // XXX: if we ever support live editing of config then
                         // we'll need to be able to remove this class on the fly.
@@ -336,7 +338,7 @@
                     if (!this.$el.is(':visible')) {
                         return;
                     }
-                    if (this.$roster.hasScrollBar()) {
+                    if ($(this.roster).hasScrollBar()) {
                         this.filter_view.show();
                     } else if (!this.filter_view.isActive()) {
                         this.filter_view.hide();
@@ -491,12 +493,15 @@
                 appendGroup: function (view) {
                     /* Add the group at the bottom of the roster
                      */
-                    var $last = this.$roster.find('.roster-group').last();
-                    var $siblings = $last.siblings('dd');
-                    if ($siblings.length > 0) {
-                        $siblings.last().after(view.$el);
+                    
+                    var last = sizzle('.roster-group:last', this.roster);
+                    var siblings = _.filter(last.parentNode.children, function (child) {
+                        return child !== last && child.tagName === 'dd';
+                    });
+                    if (siblings.length > 0) {
+                        siblings[siblings.length-1].insertAdjacentHTML(view.el.outerHTML);
                     } else {
-                        $last.after(view.$el);
+                        last.insertAdjacentHTML('afterend', view.el.outerHTML);
                     }
                     return this;
                 },
@@ -600,33 +605,30 @@
                          *  So in both cases the user is a "pending" contact.
                          */
                         this.el.classList.add('pending-xmpp-contact');
-                        this.$el.html(tpl_pending_contact(
+                        this.el.innerHTML = tpl_pending_contact(
                             _.extend(item.toJSON(), {
                                 'desc_remove': __('Click to remove this contact'),
                                 'allow_chat_pending_contacts': _converse.allow_chat_pending_contacts
-                            })
-                        ));
+                            }));
                     } else if (requesting === true) {
                         this.el.classList.add('requesting-xmpp-contact');
-                        this.$el.html(tpl_requesting_contact(
+                        this.el.innerHTML = tpl_requesting_contact(
                             _.extend(item.toJSON(), {
                                 'desc_accept': __("Click to accept this contact request"),
                                 'desc_decline': __("Click to decline this contact request"),
                                 'allow_chat_pending_contacts': _converse.allow_chat_pending_contacts
-                            })
-                        ));
+                            }));
                     } else if (subscription === 'both' || subscription === 'to') {
                         this.el.classList.add('current-xmpp-contact');
                         this.$el.removeClass(_.without(['both', 'to'], subscription)[0]).addClass(subscription);
-                        this.$el.html(tpl_roster_item(
+                        this.el.innerHTML = tpl_roster_item(
                             _.extend(item.toJSON(), {
                                 'desc_status': STATUSES[chat_status||'offline'],
                                 'desc_chat': __('Click to chat with this contact'),
                                 'desc_remove': __('Click to remove this contact'),
                                 'title_fullname': __('Name'),
                                 'allow_contact_removal': _converse.allow_contact_removal
-                            })
-                        ));
+                            }));
                     }
                     return this;
                 },
@@ -741,13 +743,11 @@
 
                 render: function () {
                     this.el.setAttribute('data-group', this.model.get('name'));
-                    this.$el.html(
-                        $(tpl_group_header({
-                            label_group: this.model.get('name'),
-                            desc_group_toggle: this.model.get('description'),
-                            toggle_state: this.model.get('state')
-                        }))
-                    );
+                    this.el.innerHTML = tpl_group_header({
+                        label_group: this.model.get('name'),
+                        desc_group_toggle: this.model.get('description'),
+                        toggle_state: this.model.get('state')
+                    });
                     return this;
                 },
 
