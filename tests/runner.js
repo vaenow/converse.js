@@ -73,6 +73,7 @@ var specs = [
 
 require(['jquery', 'mock', 'boot', 'sinon', 'wait-until-promise'],
         function($, mock, jasmine, sinon, waitUntilPromise) {
+    debugger;
     window.sinon = sinon;
     window.waitUntilPromise = waitUntilPromise['default'];
     window.localStorage.clear();
