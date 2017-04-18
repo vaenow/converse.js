@@ -1094,7 +1094,7 @@
     -webkit-box-sizing: border-box;
     -moz-box-sizing: border-box;
     box-sizing: border-box; }
-  @media screen and (max-width: 1896px) {
+  @media screen and (max-width: 2896px) {
     #conversejs {
       margin: 0;
       right: 10px;
@@ -1158,7 +1158,7 @@
     #conversejs {
       width: 100%;
       width: 100vw; } }
-  @media screen and (max-width: 1896px) {
+  @media screen and (max-width: 2896px) {
     #converse-embedded-chat,
     #conversejs {
       width: 100%;
@@ -1398,17 +1398,17 @@
   @media screen and (max-height: 450px) {
     #converse-embedded-chat .flyout,
     #conversejs .flyout {
-      border-radius: 0; } }
-  @media screen and (max-width: 1896px) {
+      border-radius: 2px; } }
+  @media screen and (max-width: 2896px) {
     #converse-embedded-chat .flyout,
     #conversejs .flyout {
-      border-radius: 0; } }
+      border-radius: 2px; } }
   @media screen and (max-height: 450px) {
     #converse-embedded-chat .flyout,
     #conversejs .flyout {
       bottom: 11px;
       left: 2px; } }
-  @media screen and (max-width: 1896px) {
+  @media screen and (max-width: 2896px) {
     #converse-embedded-chat .flyout,
     #conversejs .flyout {
       bottom: 11px;
@@ -1428,7 +1428,7 @@
     #conversejs .chat-head {
       border-top-left-radius: 0;
       border-top-right-radius: 0; } }
-  @media screen and (max-width: 1896px) {
+  @media screen and (max-width: 2896px) {
     #converse-embedded-chat .chat-head,
     #conversejs .chat-head {
       border-top-left-radius: 0;
@@ -1484,7 +1484,7 @@
     #conversejs .chatbox {
       margin: 0;
       width: calc(100vw - 25px); } }
-  @media screen and (max-width: 1896px) {
+  @media screen and (max-width: 2896px) {
     #converse-embedded-chat .chatbox,
     #conversejs .chatbox {
       margin: 0;
@@ -1504,7 +1504,7 @@
         height: 400px;
         width: calc(100vw - 25px);
         height: calc(100vh - 18px); } }
-    @media all and (max-width: 1896px) {
+    @media all and (max-width: 2896px) {
       #converse-embedded-chat .chatbox .box-flyout,
       #conversejs .chatbox .box-flyout {
         height: 400px;
@@ -1535,7 +1535,7 @@
       #conversejs .chatbox .chat-body {
         border-bottom-left-radius: 0;
         border-bottom-right-radius: 0; } }
-    @media screen and (max-width: 1896px) {
+    @media screen and (max-width: 2896px) {
       #converse-embedded-chat .chatbox .chat-body,
       #conversejs .chatbox .chat-body {
         border-bottom-left-radius: 0;
@@ -1653,7 +1653,7 @@
       #converse-embedded-chat .chatbox form.sendXMPPMessage,
       #conversejs .chatbox form.sendXMPPMessage {
         width: 100%; } }
-    @media screen and (max-width: 1896px) {
+    @media screen and (max-width: 2896px) {
       #converse-embedded-chat .chatbox form.sendXMPPMessage,
       #conversejs .chatbox form.sendXMPPMessage {
         width: 100%; } }
@@ -1811,7 +1811,7 @@
 
 #conversejs #controlbox {
   margin-right: 1em; }
-  @media screen and (max-width: 1896px) {
+  @media screen and (max-width: 2896px) {
     #conversejs #controlbox {
       margin: 0; } }
   @media screen and (max-height: 450px) {
@@ -1829,7 +1829,7 @@
       #conversejs #controlbox .controlbox-head {
         border-top-left-radius: 0;
         border-top-right-radius: 0; } }
-    @media screen and (max-width: 1896px) {
+    @media screen and (max-width: 2896px) {
       #conversejs #controlbox .controlbox-head {
         border-top-left-radius: 0;
         border-top-right-radius: 0; } }
@@ -2277,7 +2277,7 @@
     #converse-embedded-chat .chatroom,
     #conversejs .chatroom {
       width: calc(100vw - 25px); } }
-  @media screen and (max-width: 1896px) {
+  @media screen and (max-width: 2896px) {
     #converse-embedded-chat .chatroom,
     #conversejs .chatroom {
       width: calc(100vw - 25px); } }
@@ -2291,7 +2291,7 @@
         height: 400px;
         width: calc(100vw - 25px);
         height: calc(100vh - 18px); } }
-    @media screen and (max-width: 1896px) {
+    @media screen and (max-width: 2896px) {
       #converse-embedded-chat .chatroom .box-flyout,
       #conversejs .chatroom .box-flyout {
         height: 400px;

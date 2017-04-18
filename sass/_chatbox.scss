@@ -3,10 +3,10 @@
     .flyout {
         border-radius: $chatbox-border-radius;
         @media screen and (max-height: $mobile-landscape-height) {
-            border-radius: 0;
+            border-radius: 2px;
         }
         @media screen and (max-width: $mobile-portrait-length) {
-            border-radius: 0;
+            border-radius: 2px;
         }
         bottom: $chatbox-hover-height;
         display: block;
