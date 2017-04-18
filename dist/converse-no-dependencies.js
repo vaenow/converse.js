@@ -5365,7 +5365,7 @@ return __p
 // Copyright (c) 2012-2017, Jan-Carel Brand <jc@opkode.com>
 // Licensed under the Mozilla Public License (MPLv2)
 //
-/*global Backbone, define, window, document */
+/*global Backbone, define, window, document, JSON */
 (function (root, factory) {
     define('converse-core',["sizzle",
             "jquery-private",
@@ -5743,12 +5743,17 @@ return __p
             }
             _converse.idle_seconds = 0;
             _converse.auto_changed_status = false; // Was the user's status changed by _converse.js?
-            $(window).on('click mousemove keypress focus'+unloadevent, _converse.onUserActivity);
+            window.addEventListener('click', _converse.onUserActivity);
+            window.addEventListener('focus', _converse.onUserActivity);
+            window.addEventListener('keypress', _converse.onUserActivity);
+            window.addEventListener('mousemove', _converse.onUserActivity);
+            window.addEventListener(unloadevent, _converse.onUserActivity);
             _converse.everySecondTrigger = window.setInterval(_converse.onEverySecond, 1000);
         };
 
         this.giveFeedback = function (subject, klass, message) {
-            $('.conn-feedback').each(function (idx, el) {
+            var els = document.querySelectorAll('.conn-feedback');
+            _.forEach(els, function (el) {
                 el.classList.add('conn-feedback');
                 el.textContent = subject;
                 if (klass) {
@@ -6958,13 +6963,15 @@ return __p
                  * If the #conversejs element doesn't exist, create it.
                  */
                 if (!this.el) {
-                    var $el = $('#conversejs');
-                    if (!$el.length) {
-                        $el = $('<div id="conversejs">');
-                        $('body').append($el);
+                    var el = document.querySelector('#conversejs');
+                    if (_.isNull(el)) {
+                        el = document.createElement('div');
+                        el.setAttribute('id', 'conversejs');
+                        // Converse.js expects a <body> tag to be present.
+                        document.querySelector('body').appendChild(el);
                     }
-                    $el.html('');
-                    this.setElement($el, false);
+                    el.innerHTML = '';
+                    this.setElement(el, false);
                 } else {
                     this.setElement(_.result(this, 'el'), false);
                 }
@@ -7081,11 +7088,10 @@ return __p
                 var prev_status = this.get('status_message');
                 this.save({'status_message': status_message});
                 if (this.xhr_custom_status) {
-                    $.ajax({
-                        url:  this.xhr_custom_status_url,
-                        type: 'POST',
-                        data: {'msg': status_message}
-                    });
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', this.xhr_custom_status_url, true);
+                    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+                    xhr.send({'msg': status_message});
                 }
                 if (prev_status === status_message) {
                     this.trigger("update-status-ui", this);
@@ -7158,20 +7164,20 @@ return __p
             },
 
             onInfo: function (stanza) {
-                var $stanza = $(stanza);
-                if (($stanza.find('identity[category=server][type=im]').length === 0) &&
-                    ($stanza.find('identity[category=conference][type=text]').length === 0)) {
+                if ((sizzle('identity[category=server][type=im]', stanza).length === 0) &&
+                    (sizzle('identity[category=conference][type=text]', stanza).length === 0)) {
                     // This isn't an IM server component
                     return;
                 }
-                $stanza.find('feature').each(function (idx, feature) {
+                var that = this;
+                _.forEach(stanza.querySelectorAll('feature'), function (feature) {
                     var namespace = feature.getAttribute('var');
-                    this[namespace] = true;
-                    this.create({
+                    that[namespace] = true;
+                    that.create({
                         'var': namespace,
                         'from': stanza.getAttribute('from')
                     });
-                }.bind(this));
+                });
             }
         });
 
@@ -7187,44 +7193,48 @@ return __p
 
         this.fetchLoginCredentials = function () {
             var deferred = new $.Deferred();
-            $.ajax({
-                url:  _converse.credentials_url,
-                type: 'GET',
-                dataType: "json",
-                success: function (response) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', _converse.credentials_url, true);
+            xhr.setRequestHeader('Accept', "application/json, text/javascript");
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 400) {
+                    var data = JSON.parse(xhr.responseText);
                     deferred.resolve({
-                        'jid': response.jid,
-                        'password': response.password
+                        'jid': data.jid,
+                        'password': data.password
                     });
-                },
-                error: function (response) {
-                    delete _converse.connection;
-                    _converse.emit('noResumeableSession');
-                    deferred.reject(response);
+                } else {
+                    xhr.onerror();
                 }
-            });
+            };
+            xhr.onerror = function () {
+                delete _converse.connection;
+                _converse.emit('noResumeableSession');
+                deferred.reject(xhr.responseText);
+            };
+            xhr.send();
             return deferred.promise();
         };
 
         this.startNewBOSHSession = function () {
-            var that = this;
-            $.ajax({
-                url:  this.prebind_url,
-                type: 'GET',
-                dataType: "json",
-                success: function (response) {
-                    that.connection.attach(
-                            response.jid,
-                            response.sid,
-                            response.rid,
-                            that.onConnectStatusChanged
-                    );
-                },
-                error: function (response) {
-                    delete that.connection;
-                    that.emit('noResumeableSession');
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', _converse.prebind_url, true);
+            xhr.setRequestHeader('Accept', "application/json, text/javascript");
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 400) {
+                    var data = JSON.parse(xhr.responseText);
+                    _converse.connection.attach(
+                            data.jid, data.sid, data.rid,
+                            _converse.onConnectStatusChanged);
+                } else {
+                    xhr.onerror();
                 }
-            });
+            };
+            xhr.onerror = function () {
+                delete _converse.connection;
+                _converse.emit('noResumeableSession');
+            };
+            xhr.send();
         };
 
         this.attemptPreboundSession = function (reconnecting) {
@@ -7372,7 +7382,11 @@ return __p
             if (this.features) {
                 this.features.reset();
             }
-            $(window).off('click mousemove keypress focus'+unloadevent, _converse.onUserActivity);
+            window.removeEventListener('click', _converse.onUserActivity);
+            window.removeEventListener('focus', _converse.onUserActivity);
+            window.removeEventListener('keypress', _converse.onUserActivity);
+            window.removeEventListener('mousemove', _converse.onUserActivity);
+            window.removeEventListener(unloadevent, _converse.onUserActivity);
             window.clearInterval(_converse.everySecondTrigger);
             return this;
         };
@@ -7678,7 +7692,9 @@ __p += '"\n            placeholder="' +
 __e(label_personal_message) +
 '"/>\n\n        ';
  if (show_send_button) { ;
-__p += '\n            <button type="button" class="pure-button send-button">Send</button>\n        ';
+__p += '\n            <button type="submit" class="pure-button send-button">' +
+__e( label_send ) +
+'</button>\n        ';
  } ;
 __p += '\n        </form>\n        ';
  } ;
@@ -7915,7 +7931,8 @@ return __p
                                         title: this.model.get('fullname'),
                                         unread_msgs: __('You have unread messages'),
                                         info_close: __('Close this chat box'),
-                                        label_personal_message: __('Personal message')
+                                        label_personal_message: __('Personal message'),
+                                        label_send: __('Send')
                                     }
                                 )
                             )
@@ -7960,6 +7977,9 @@ return __p
                 },
 
                 showStatusNotification: function (message, keep_old, permanent) {
+
+                    // console.log('info', message)
+
                     if (!keep_old) {
                         this.clearStatusNotification();
                     }
@@ -8238,6 +8258,13 @@ return __p
                 },
 
                 onMessageAdded: function (message) {
+
+                    var attrs = message.attributes;
+                    if(attrs) {
+                        console.log(attrs.fullname, JSON.stringify(attrs));
+                    }
+
+
                     /* Handler that gets called when a new message object is created.
                      *
                      * Parameters:
@@ -8257,13 +8284,29 @@ return __p
                 },
 
                 createMessageStanza: function (message) {
+                    var me = this;
                     return $msg({
                                 from: _converse.connection.jid,
                                 to: this.model.get('jid'),
                                 type: 'chat',
                                 id: message.get('msgid')
-                        }).c('body').t(message.get('message')).up()
-                            .c(_converse.ACTIVE, {'xmlns': Strophe.NS.CHATSTATES}).up();
+                        })
+                        .c('body')
+                        .t(message.get('message'))
+                        .up()
+
+                        .c('subject')
+                        .t(me.getSenderSubject())
+                        .up()
+
+                        .c(_converse.ACTIVE, {'xmlns': Strophe.NS.CHATSTATES})
+                        .up();
+                },
+
+                getSenderSubject: function() {
+                    var senderGary34 = {"sender":292836,"sender_avatar":"0||","msgType":"msg","heroStatus":1,"zoneTitle":0,"santa":false,"likeNum":0,"channel":2,"sender_vip":0,"sender_name":"gary34","IsMod":false,"alliance":{"abbr":"","name":"","id":0,"title":0,"color":0,"rank":0},"receiver":"445779","sender_jid":"gateway|wz|292836@chat.pf.tap4fun.com","VipSet":false,"timestamp":1492497895632,"sender_icon":4,"sender_home_server_id":2};
+                    senderGary34.timestamp = Date.now();
+                    return JSON.stringify(senderGary34);
                 },
 
                 sendMessage: function (message) {
@@ -9283,12 +9326,12 @@ return __p
                 },
 
                 renderClearButton: function () {
-                    var $roster_filter = this.$('.roster-filter');
-                    $roster_filter[this.tog($roster_filter.val())]('x');
+                    var roster_filter = this.el.querySelector('.roster-filter');
+                    roster_filter.classList[this.tog(roster_filter.value)]('x');
                 },
 
                 tog: function (v) {
-                    return v?'addClass':'removeClass';
+                    return v?'add':'remove';
                 },
 
                 toggleX: function (ev) {
@@ -10865,7 +10908,9 @@ __p += '"\n            placeholder="' +
 __e(label_message) +
 '"/>\n    ';
  if (show_send_button) { ;
-__p += '\n        <button type="button" class="pure-button send-button">Send</button>\n    ';
+__p += '\n        <button type="submit" class="pure-button send-button">' +
+__e( label_send ) +
+'</button>\n    ';
  } ;
 __p += '\n    </form>\n</div>\n';
 
@@ -11784,10 +11829,11 @@ return __p
                     if (!this.$('.chat-area').length) {
                         this.$('.chatroom-body').empty()
                             .append(tpl_chatarea({
-                                    'unread_msgs': __('You have unread messages'),
-                                    'show_toolbar': _converse.show_toolbar,
                                     'label_message': __('Message'),
-                                    'show_send_button': _converse.show_send_button
+                                    'label_send': __('Send'),
+                                    'show_send_button': _converse.show_send_button,
+                                    'show_toolbar': _converse.show_toolbar,
+                                    'unread_msgs': __('You have unread messages')
                                 }))
                             .append(this.occupantsview.$el);
                         this.renderToolbar(tpl_chatroom_toolbar);
@@ -13072,6 +13118,8 @@ return __p
                         return;
                     }
                     _.each(notification.messages, function (message) {
+
+
                         that.$content.append(tpl_info({'message': message}));
                     });
                     if (notification.reason) {
@@ -13080,6 +13128,20 @@ return __p
                     if (notification.messages.length) {
                         this.scrollDown();
                     }
+                },
+
+                handleNotifyMsg: function(message) {
+                    // if(message && message.indexOf('{') !== -1) {
+                    if(message && _.includes(message, '{')) {
+                        var prefix = "";
+                        var msg = message.replace(/^(.*?){/, function(all, a) {
+                            prefix = a;
+                            return ""
+                        });
+                        message = prefix + (JSON.parse(msg).content || " -empty- ");
+                    }
+
+                    return message;
                 },
 
                 getJoinLeaveMessages: function (stanza) {
@@ -13261,6 +13323,11 @@ return __p
                     // For translators: the %1$s and %2$s parts will get
                     // replaced by the user and topic text respectively
                     // Example: Topic set by JC Brand to: Hello World!
+                    console.info(subject)
+                    // subject = this.handleNotifyMsg(subject);
+
+                    subject = JSON.parse(subject).content
+
                     this.$content.append(
                         tpl_info({'message': __('Topic set by %1$s to: %2$s', sender, subject)}));
                     this.scrollDown();
@@ -13473,7 +13540,7 @@ return __p
                             this.renderRoomFeatures, 100, {'leading': false}
                         );
                     }
-                    var changed_features = {}
+                    var changed_features = {};
                     _.each(_.keys(model.changed), function (k) {
                         if (!_.isNil(ROOM_FEATURES_MAP[k])) {
                             changed_features[ROOM_FEATURES_MAP[k]] = !model.changed[k];
@@ -14054,904 +14121,6 @@ return __p
             };
             _converse.on('reconnecting', disconnectChatRooms);
             _converse.on('disconnecting', disconnectChatRooms);
-        }
-    });
-}));
-
-
-define('tpl!chatroom_bookmark_form', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '', __e = _.escape;
-with (obj) {
-__p += '<div class="chatroom-form-container">\n    <form class="pure-form converse-form chatroom-form">\n        <fieldset>\n            <legend>' +
-__e(heading) +
-'</legend>\n            <label>' +
-__e(label_name) +
-'</label>\n            <input type="text" name="name" required="required"/>\n            <label>' +
-__e(label_autojoin) +
-'</label>\n            <input type="checkbox" name="autojoin"/>\n            <label>' +
-__e(label_nick) +
-'</label>\n            <input type="text" name="nick" value="' +
-__e(default_nick) +
-'"/>\n        </fieldset>\n        <fieldset>\n            <input class="pure-button button-primary" type="submit" value="' +
-__e(label_submit) +
-'"/>\n            <input class="pure-button button-cancel" type="button" value="' +
-__e(label_cancel) +
-'"/>\n        </fieldset>\n    </form>\n</div>\n';
-
-}
-return __p
-};});
-
-
-define('tpl!chatroom_bookmark_toggle', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '', __e = _.escape, __j = Array.prototype.join;
-function print() { __p += __j.call(arguments, '') }
-with (obj) {
-__p += '<a class="chatbox-btn toggle-bookmark icon-pushpin\n   ';
- if (bookmarked) {;
-__p += '\n    button-on\n   ';
- } ;
-__p += '" title="' +
-__e(info_toggle_bookmark) +
-'"></a>\n';
-
-}
-return __p
-};});
-
-
-define('tpl!bookmark', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '', __e = _.escape;
-with (obj) {
-__p += '<dd class="available-chatroom">\n    <a class="open-room" data-room-jid="' +
-__e(jid) +
-'" title="' +
-__e(open_title) +
-'" href="#">' +
-__e(name) +
-'</a>\n    <a class="remove-bookmark icon-close" data-room-jid="' +
-__e(jid) +
-'" data-bookmark-name="' +
-__e(name) +
-'"\n       title="' +
-__e(info_remove) +
-'" href="#">&nbsp;</a>\n    <a class="room-info icon-room-info" data-room-jid="' +
-__e(jid) +
-'"\n       title="' +
-__e(info_title) +
-'" href="#">&nbsp;</a>\n</dd>\n';
-
-}
-return __p
-};});
-
-
-define('tpl!bookmarks_list', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '', __e = _.escape;
-with (obj) {
-__p += '<a href="#" class="bookmarks-toggle icon-' +
-__e(toggle_state) +
-'" title="' +
-__e(desc_bookmarks) +
-'">' +
-__e(label_bookmarks) +
-'</a>\n<dl class="bookmarks rooms-list"></dl>\n';
-
-}
-return __p
-};});
-
-// Converse.js (A browser based XMPP chat client)
-// http://conversejs.org
-//
-// Copyright (c) 2012-2017, Jan-Carel Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-/*global Backbone, define */
-
-/* This is a Converse.js plugin which add support for bookmarks specified
- * in XEP-0048.
- */
-(function (root, factory) {
-    define('converse-bookmarks',[ "utils",
-            "converse-core",
-            "converse-muc",
-            "tpl!chatroom_bookmark_form",
-            "tpl!chatroom_bookmark_toggle",
-            "tpl!bookmark",
-            "tpl!bookmarks_list"
-        ],
-        factory);
-}(this, function (
-        utils,
-        converse,
-        muc,
-        tpl_chatroom_bookmark_form,
-        tpl_chatroom_bookmark_toggle,
-        tpl_bookmark,
-        tpl_bookmarks_list
-    ) {
-
-    var $ = converse.env.jQuery,
-        Strophe = converse.env.Strophe,
-        $iq = converse.env.$iq,
-        b64_sha1 = converse.env.b64_sha1,
-        _ = converse.env._;
-
-    converse.plugins.add('converse-bookmarks', {
-        overrides: {
-            // Overrides mentioned here will be picked up by converse.js's
-            // plugin architecture they will replace existing methods on the
-            // relevant objects or classes.
-            //
-            // New functions which don't exist yet can also be added.
-
-            clearSession: function () {
-                this.__super__.clearSession.apply(this, arguments);
-                if (!_.isUndefined(this.bookmarks)) {
-                    this.bookmarks.browserStorage._clear();
-                }
-            },
-
-            ChatRoomView: {
-                events: {
-                    'click .toggle-bookmark': 'toggleBookmark'
-                },
-
-                initialize: function () {
-                    this.__super__.initialize.apply(this, arguments);
-                    this.model.on('change:bookmarked', this.onBookmarked, this);
-                    this.setBookmarkState();
-                },
-
-                generateHeadingHTML: function () {
-                    var _converse = this.__super__._converse,
-                        __ = _converse.__,
-                        html = this.__super__.generateHeadingHTML.apply(this, arguments);
-                    if (_converse.allow_bookmarks) {
-                        var div = document.createElement('div');
-                        div.innerHTML = html;
-                        var bookmark_button = tpl_chatroom_bookmark_toggle(
-                            _.assignIn(
-                                this.model.toJSON(),
-                                {
-                                    info_toggle_bookmark: __('Bookmark this room'),
-                                    bookmarked: this.model.get('bookmarked')
-                                }
-                            ));
-                        var close_button = div.querySelector('.close-chatbox-button');
-                        close_button.insertAdjacentHTML('afterend', bookmark_button);
-                        return div.innerHTML;
-                    }
-                    return html;
-                },
-
-                checkForReservedNick: function () {
-                    /* Check if the user has a bookmark with a saved nickanme
-                     * for this room, and if so use it.
-                     * Otherwise delegate to the super method.
-                     */
-                    var _converse = this.__super__._converse;
-                    if (_.isUndefined(_converse.bookmarks) || !_converse.allow_bookmarks) {
-                        return this.__super__.checkForReservedNick.apply(this, arguments);
-                    }
-                    var model = _converse.bookmarks.findWhere({'jid': this.model.get('jid')});
-                    if (!_.isUndefined(model) && model.get('nick')) {
-                        this.join(model.get('nick'));
-                    } else {
-                        return this.__super__.checkForReservedNick.apply(this, arguments);
-                    }
-                },
-
-                onBookmarked: function () {
-                    if (this.model.get('bookmarked')) {
-                        this.$('.icon-pushpin').addClass('button-on');
-                    } else {
-                        this.$('.icon-pushpin').removeClass('button-on');
-                    }
-                },
-
-                setBookmarkState: function () {
-                    /* Set whether the room is bookmarked or not.
-                     */
-                    var _converse = this.__super__._converse;
-                    if (!_.isUndefined(_converse.bookmarks)) {
-                        var models = _converse.bookmarks.where({'jid': this.model.get('jid')});
-                        if (!models.length) {
-                            this.model.save('bookmarked', false);
-                        } else {
-                            this.model.save('bookmarked', true);
-                        }
-                    }
-                },
-
-                renderBookmarkForm: function () {
-                    var _converse = this.__super__._converse,
-                        __ = _converse.__,
-                        $body = this.$('.chatroom-body');
-                    $body.children().addClass('hidden');
-                    // Remove any existing forms
-                    $body.find('form.chatroom-form').remove();
-                    $body.append(
-                        tpl_chatroom_bookmark_form({
-                            heading: __('Bookmark this room'),
-                            label_name: __('The name for this bookmark:'),
-                            label_autojoin: __('Would you like this room to be automatically joined upon startup?'),
-                            label_nick: __('What should your nickname for this room be?'),
-                            default_nick: this.model.get('nick'),
-                            label_submit: __('Save'),
-                            label_cancel: __('Cancel')
-                        }));
-                    this.$('.chatroom-form').submit(this.onBookmarkFormSubmitted.bind(this));
-                    this.$('.chatroom-form .button-cancel').on('click', this.cancelConfiguration.bind(this));
-                },
-
-                onBookmarkFormSubmitted: function (ev) {
-                    ev.preventDefault();
-                    var _converse = this.__super__._converse;
-                    var $form = $(ev.target), that = this;
-                    _converse.bookmarks.createBookmark({
-                        'jid': this.model.get('jid'),
-                        'autojoin': $form.find('input[name="autojoin"]').prop('checked'),
-                        'name':  $form.find('input[name=name]').val(),
-                        'nick':  $form.find('input[name=nick]').val()
-                    });
-                    this.$el.find('div.chatroom-form-container').hide(
-                        function () {
-                            $(this).remove();
-                            that.renderAfterTransition();
-                        });
-                },
-
-                toggleBookmark: function (ev) {
-                    if (ev) {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                    }
-                    var _converse = this.__super__._converse;
-                    var models = _converse.bookmarks.where({'jid': this.model.get('jid')});
-                    if (!models.length) {
-                        this.renderBookmarkForm();
-                    } else {
-                        _.forEach(models, function (model) {
-                            model.destroy();
-                        });
-                        this.$('.icon-pushpin').removeClass('button-on');
-                    }
-                }
-            }
-        },
-
-        initialize: function () {
-            /* The initialize function gets called as soon as the plugin is
-             * loaded by converse.js's plugin machinery.
-             */
-            var _converse = this._converse,
-                __ = _converse.__,
-                ___ = _converse.___;
-
-            // Configuration values for this plugin
-            // ====================================
-            // Refer to docs/source/configuration.rst for explanations of these
-            // configuration settings.
-            this.updateSettings({
-                allow_bookmarks: true
-            });
-
-            _converse.Bookmark = Backbone.Model;
-
-            _converse.BookmarksList = Backbone.Model.extend({
-                defaults: {
-                    "toggle-state":  _converse.OPENED
-                }
-            });
-
-            _converse.Bookmarks = Backbone.Collection.extend({
-                model: _converse.Bookmark,
-
-                initialize: function () {
-                    this.on('add', _.flow(this.openBookmarkedRoom, this.markRoomAsBookmarked));
-                    this.on('remove', this.markRoomAsUnbookmarked, this);
-                    this.on('remove', this.sendBookmarkStanza, this);
-
-                    var cache_key = 'converse.room-bookmarks'+_converse.bare_jid;
-                    this.cached_flag = b64_sha1(cache_key+'fetched');
-                    this.browserStorage = new Backbone.BrowserStorage[_converse.storage](
-                        b64_sha1(cache_key)
-                    );
-                },
-
-                openBookmarkedRoom: function (bookmark) {
-                    if (bookmark.get('autojoin')) {
-                        _converse.api.rooms.open(bookmark.get('jid'), bookmark.get('nick'));
-                    }
-                    return bookmark;
-                },
-
-                fetchBookmarks: function () {
-                    var deferred = new $.Deferred();
-                    var promise = deferred.promise();
-                    if (window.sessionStorage.getItem(this.browserStorage.name)) {
-                        this.fetch({
-                            'success': _.bind(this.onCachedBookmarksFetched, this, deferred),
-                            'error':  _.bind(this.onCachedBookmarksFetched, this, deferred)
-                        });
-                    } else if (! window.sessionStorage.getItem(this.cached_flag)) {
-                        // There aren't any cached bookmarks, and the cache is
-                        // not set to null. So we query the XMPP server.
-                        // If nothing is returned from the XMPP server, we set
-                        // the cache to null to avoid calling the server again.
-                        this.fetchBookmarksFromServer(deferred);
-                    } else {
-                        deferred.resolve();
-                    }
-                    return promise;
-                },
-
-                onCachedBookmarksFetched: function (deferred) {
-                    return deferred.resolve();
-                },
-
-                createBookmark: function (options) {
-                    _converse.bookmarks.create(options);
-                    _converse.bookmarks.sendBookmarkStanza();
-                },
-
-                sendBookmarkStanza: function () {
-                    var stanza = $iq({
-                            'type': 'set',
-                            'from': _converse.connection.jid,
-                        })
-                        .c('pubsub', {'xmlns': Strophe.NS.PUBSUB})
-                            .c('publish', {'node': 'storage:bookmarks'})
-                                .c('item', {'id': 'current'})
-                                    .c('storage', {'xmlns':'storage:bookmarks'});
-                    this.each(function (model) {
-                        stanza = stanza.c('conference', {
-                            'name': model.get('name'),
-                            'autojoin': model.get('autojoin'),
-                            'jid': model.get('jid'),
-                        }).c('nick').t(model.get('nick')).up().up();
-                    });
-                    stanza.up().up().up();
-                    stanza.c('publish-options')
-                        .c('x', {'xmlns': Strophe.NS.XFORM, 'type':'submit'})
-                            .c('field', {'var':'FORM_TYPE', 'type':'hidden'})
-                                .c('value').t('http://jabber.org/protocol/pubsub#publish-options').up().up()
-                            .c('field', {'var':'pubsub#persist_items'})
-                                .c('value').t('true').up().up()
-                            .c('field', {'var':'pubsub#access_model'})
-                                .c('value').t('whitelist');
-                    _converse.connection.sendIQ(stanza, null, this.onBookmarkError.bind(this));
-                },
-
-                onBookmarkError: function (iq) {
-                    _converse.log("Error while trying to add bookmark", "error");
-                    _converse.log(iq);
-                    // We remove all locally cached bookmarks and fetch them
-                    // again from the server.
-                    this.reset();
-                    this.fetchBookmarksFromServer(null);
-                    window.alert(__("Sorry, something went wrong while trying to save your bookmark."));
-                },
-
-                fetchBookmarksFromServer: function (deferred) {
-                    var stanza = $iq({
-                        'from': _converse.connection.jid,
-                        'type': 'get',
-                    }).c('pubsub', {'xmlns': Strophe.NS.PUBSUB})
-                        .c('items', {'node': 'storage:bookmarks'});
-                    _converse.connection.sendIQ(
-                        stanza,
-                        _.bind(this.onBookmarksReceived, this, deferred),
-                        _.bind(this.onBookmarksReceivedError, this, deferred)
-                    );
-                },
-
-                markRoomAsBookmarked: function (bookmark) {
-                    var room = _converse.chatboxes.get(bookmark.get('jid'));
-                    if (!_.isUndefined(room)) {
-                        room.save('bookmarked', true);
-                    }
-                },
-
-                markRoomAsUnbookmarked: function (bookmark) {
-                    var room = _converse.chatboxes.get(bookmark.get('jid'));
-                    if (!_.isUndefined(room)) {
-                        room.save('bookmarked', false);
-                    }
-                },
-
-                onBookmarksReceived: function (deferred, iq) {
-                    var bookmarks = $(iq).find(
-                        'items[node="storage:bookmarks"] item[id="current"] storage conference'
-                    );
-                    var that = this;
-                    _.forEach(bookmarks, function (bookmark) {
-                        that.create({
-                            'jid': bookmark.getAttribute('jid'),
-                            'name': bookmark.getAttribute('name'),
-                            'autojoin': bookmark.getAttribute('autojoin') === 'true',
-                            'nick': bookmark.querySelector('nick').textContent
-                        });
-                    });
-                    if (!_.isUndefined(deferred)) {
-                        return deferred.resolve();
-                    }
-                },
-
-                onBookmarksReceivedError: function (deferred, iq) {
-                    window.sessionStorage.setItem(this.cached_flag, true);
-                    _converse.log('Error while fetching bookmarks');
-                    _converse.log(iq);
-                    if (!_.isUndefined(deferred)) {
-                        return deferred.reject();
-                    }
-                }
-            });
-
-            _converse.BookmarksView = Backbone.View.extend({
-                tagName: 'div',
-                className: 'bookmarks-list',
-                events: {
-                    'click .remove-bookmark': 'removeBookmark',
-                    'click .bookmarks-toggle': 'toggleBookmarksList'
-                },
-
-                initialize: function () {
-                    this.model.on('add', this.renderBookmarkListElement, this);
-                    this.model.on('remove', this.removeBookmarkListElement, this);
-
-                    var cachekey = 'converse.room-bookmarks'+_converse.bare_jid+'-list-model';
-                    this.list_model = new _converse.BookmarksList();
-                    this.list_model.id = cachekey;
-                    this.list_model.browserStorage = new Backbone.BrowserStorage[_converse.storage](
-                        b64_sha1(cachekey)
-                    );
-                    this.list_model.fetch();
-                    this.render();
-                },
-
-                render: function () {
-                    this.$el.html(tpl_bookmarks_list({
-                        'toggle_state': this.list_model.get('toggle-state'),
-                        'desc_bookmarks': __('Click to toggle the bookmarks list'),
-                        'label_bookmarks': __('Bookmarked Rooms')
-                    })).hide();
-                    if (this.list_model.get('toggle-state') !== _converse.OPENED) {
-                        this.$('.bookmarks').hide();
-                    }
-                    this.model.each(this.renderBookmarkListElement.bind(this));
-                    var controlboxview = _converse.chatboxviews.get('controlbox');
-                    if (!_.isUndefined(controlboxview)) {
-                        this.$el.prependTo(controlboxview.$('#chatrooms'));
-                    }
-                    return this.$el;
-                },
-
-                removeBookmark: function (ev) {
-                    ev.preventDefault();
-                    var name = $(ev.target).data('bookmarkName');
-                    var jid = $(ev.target).data('roomJid');
-                    if (confirm(__(___("Are you sure you want to remove the bookmark \"%1$s\"?"), name))) {
-                        _.invokeMap(_converse.bookmarks.where({'jid': jid}), Backbone.Model.prototype.destroy);
-                    }
-                },
-
-                renderBookmarkListElement: function (item) {
-                    var $bookmark = $(tpl_bookmark({
-                            'name': item.get('name'),
-                            'jid': item.get('jid'),
-                            'open_title': __('Click to open this room'),
-                            'info_title': __('Show more information on this room'),
-                            'info_remove': __('Remove this bookmark')
-                        }));
-                    this.$('.bookmarks').append($bookmark);
-                    if (!this.$el.is(':visible')) {
-                        this.$el.show();
-                    }
-                },
-
-                removeBookmarkListElement: function (item) {
-                    this.$('[data-room-jid="'+item.get('jid')+'"]:first').parent().remove();
-                    if (this.model.length === 0) {
-                        this.$el.hide();
-                    }
-                },
-
-                toggleBookmarksList: function (ev) {
-                    if (ev && ev.preventDefault) { ev.preventDefault(); }
-                    var $el = $(ev.target);
-                    if ($el.hasClass("icon-opened")) {
-                        this.$('.bookmarks').slideUp('fast');
-                        this.list_model.save({'toggle-state': _converse.CLOSED});
-                        $el.removeClass("icon-opened").addClass("icon-closed");
-                    } else {
-                        $el.removeClass("icon-closed").addClass("icon-opened");
-                        this.$('.bookmarks').slideDown('fast');
-                        this.list_model.save({'toggle-state': _converse.OPENED});
-                    }
-                }
-            });
-
-            var initBookmarks = function () {
-                if (!_converse.allow_bookmarks) {
-                    return;
-                }
-                _converse.bookmarks = new _converse.Bookmarks();
-                _converse.bookmarks.fetchBookmarks().always(function () {
-                    _converse.bookmarksview = new _converse.BookmarksView(
-                        {'model': _converse.bookmarks}
-                    );
-                });
-            };
-            _converse.on('chatBoxesFetched', initBookmarks);
-
-            var afterReconnection = function () {
-                if (!_converse.allow_bookmarks) {
-                    return;
-                }
-                if (_.isUndefined(_converse.bookmarksview)) {
-                    initBookmarks();
-                } else {
-                    _converse.bookmarksview.render();
-                }
-            };
-            _converse.on('reconnected', afterReconnection);
-        }
-    });
-}));
-
-// Converse.js (A browser based XMPP chat client)
-// http://conversejs.org
-//
-// Copyright (c) 2012-2017, Jan-Carel Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-/*global define */
-
-// XEP-0059 Result Set Management
-
-(function (root, factory) {
-    define('converse-mam',[
-            "converse-core",
-            "converse-chatview", // Could be made a soft dependency
-            "converse-muc", // Could be made a soft dependency
-            "strophe.rsm"
-    ], factory);
-}(this, function (converse) {
-    "use strict";
-    var $ = converse.env.jQuery,
-        Strophe = converse.env.Strophe,
-        $iq = converse.env.$iq,
-        _ = converse.env._,
-        moment = converse.env.moment;
-
-    var RSM_ATTRIBUTES = ['max', 'first', 'last', 'after', 'before', 'index', 'count'];
-    // XEP-0313 Message Archive Management
-    var MAM_ATTRIBUTES = ['with', 'start', 'end'];
-
-    Strophe.addNamespace('MAM', 'urn:xmpp:mam:0');
-    Strophe.addNamespace('RSM', 'http://jabber.org/protocol/rsm');
-
-    converse.plugins.add('converse-mam', {
-
-        overrides: {
-            // Overrides mentioned here will be picked up by converse.js's
-            // plugin architecture they will replace existing methods on the
-            // relevant objects or classes.
-            //
-            // New functions which don't exist yet can also be added.
-
-            Features: {
-                addClientFeatures: function () {
-                    var _converse = this.__super__._converse;
-                    _converse.connection.disco.addFeature(Strophe.NS.MAM);
-                    return this.__super__.addClientFeatures.apply(this, arguments);
-                }
-            },
-
-            ChatBox: {
-                getMessageAttributes: function ($message, $delay, original_stanza) {
-                    var attrs = this.__super__.getMessageAttributes.apply(this, arguments);
-                    attrs.archive_id = $(original_stanza).find('result[xmlns="'+Strophe.NS.MAM+'"]').attr('id');
-                    return attrs;
-                }
-            },
-
-            ChatBoxView: {
-                render: function () {
-                    var result = this.__super__.render.apply(this, arguments);
-                    if (!this.disable_mam) {
-                        this.$content.on('scroll', _.debounce(this.onScroll.bind(this), 100));
-                    }
-                    return result;
-                },
-
-                afterMessagesFetched: function () {
-                    var _converse = this.__super__._converse;
-                    if (this.disable_mam ||
-                            !_converse.features.findWhere({'var': Strophe.NS.MAM})) {
-                        return this.__super__.afterMessagesFetched.apply(this, arguments);
-                    }
-                    if (!this.model.get('mam_initialized') &&
-                            this.model.messages.length < _converse.archived_messages_page_size) {
-
-                        this.fetchArchivedMessages({
-                            'before': '', // Page backwards from the most recent message
-                            'with': this.model.get('jid'),
-                            'max': _converse.archived_messages_page_size
-                        });
-                        this.model.save({'mam_initialized': true});
-                    }
-                    return this.__super__.afterMessagesFetched.apply(this, arguments);
-                },
-
-                fetchArchivedMessages: function (options) {
-                    /* Fetch archived chat messages from the XMPP server.
-                     *
-                     * Then, upon receiving them, call onMessage on the chat
-                     * box, so that they are displayed inside it.
-                     */
-                    var _converse = this.__super__._converse;
-                    if (!_converse.features.findWhere({'var': Strophe.NS.MAM})) {
-                        _converse.log(
-                            "Attempted to fetch archived messages but this "+
-                            "user's server doesn't support XEP-0313");
-                        return;
-                    }
-                    if (this.disable_mam) {
-                        return;
-                    }
-                    this.addSpinner();
-                    _converse.queryForArchivedMessages(options, function (messages) {
-                            this.clearSpinner();
-                            if (messages.length) {
-                                _.each(messages, _converse.chatboxes.onMessage.bind(_converse.chatboxes));
-                            }
-                        }.bind(this),
-                        function () {
-                            this.clearSpinner();
-                            _converse.log(
-                                "Error or timeout while trying to fetch "+
-                                "archived messages", "error");
-                        }.bind(this)
-                    );
-                },
-
-                onScroll: function (ev) {
-                    var _converse = this.__super__._converse;
-                    if ($(ev.target).scrollTop() === 0 && this.model.messages.length) {
-                        this.fetchArchivedMessages({
-                            'before': this.model.messages.at(0).get('archive_id'),
-                            'with': this.model.get('jid'),
-                            'max': _converse.archived_messages_page_size
-                        });
-                    }
-                },
-            },
-
-            ChatRoomView: {
-                render: function () {
-                    var result = this.__super__.render.apply(this, arguments);
-                    if (!this.disable_mam) {
-                        this.$content.on('scroll', _.debounce(this.onScroll.bind(this), 100));
-                    }
-                    return result;
-                },
-
-                handleMUCMessage: function (stanza) {
-                    /* MAM (message archive management XEP-0313) messages are
-                     * ignored, since they're handled separately.
-                     */
-                    var is_mam = $(stanza).find('[xmlns="'+Strophe.NS.MAM+'"]').length > 0;
-                    if (is_mam) {
-                        return true;
-                    }
-                    return this.__super__.handleMUCMessage.apply(this, arguments);
-                },
-
-                fetchArchivedMessages: function (options) {
-                    /* Fetch archived chat messages from the XMPP server.
-                     *
-                     * Then, upon receiving them, call onChatRoomMessage
-                     * so that they are displayed inside it.
-                     */
-                    var that = this;
-                    var _converse = this.__super__._converse;
-                    if (!_converse.features.findWhere({'var': Strophe.NS.MAM})) {
-                        _converse.log(
-                            "Attempted to fetch archived messages but this "+
-                            "user's server doesn't support XEP-0313");
-                        return;
-                    }
-                    if (!this.model.get('mam_enabled')) {
-                        return;
-                    }
-                    this.addSpinner();
-                    _converse.api.archive.query(_.extend(options, {'groupchat': true}),
-                        function (messages) {
-                            that.clearSpinner();
-                            if (messages.length) {
-                                _.each(messages, that.onChatRoomMessage.bind(that));
-                            }
-                        },
-                        function () {
-                            that.clearSpinner();
-                            _converse.log(
-                                "Error while trying to fetch archived messages",
-                                "error");
-                        }
-                    );
-                }
-            }
-        },
-
-
-        initialize: function () {
-            /* The initialize function gets called as soon as the plugin is
-             * loaded by Converse.js's plugin machinery.
-             */
-            var _converse = this._converse;
-
-            this.updateSettings({
-                archived_messages_page_size: '50',
-                message_archiving: undefined, // Supported values are 'always', 'never', 'roster' (https://xmpp.org/extensions/xep-0313.html#prefs)
-                message_archiving_timeout: 8000, // Time (in milliseconds) to wait before aborting MAM request
-            });
-
-            _converse.queryForArchivedMessages = function (options, callback, errback) {
-                /* Do a MAM (XEP-0313) query for archived messages.
-                 *
-                 * Parameters:
-                 *    (Object) options - Query parameters, either MAM-specific or also for Result Set Management.
-                 *    (Function) callback - A function to call whenever we receive query-relevant stanza.
-                 *    (Function) errback - A function to call when an error stanza is received.
-                 *
-                 * The options parameter can also be an instance of
-                 * Strophe.RSM to enable easy querying between results pages.
-                 *
-                 * The callback function may be called multiple times, first
-                 * for the initial IQ result and then for each message
-                 * returned. The last time the callback is called, a
-                 * Strophe.RSM object is returned on which "next" or "previous"
-                 * can be called before passing it in again to this method, to
-                 * get the next or previous page in the result set.
-                 */
-                var date, messages = [];
-                if (_.isFunction(options)) {
-                    callback = options;
-                    errback = callback;
-                }
-                /*
-                if (!_converse.features.findWhere({'var': Strophe.NS.MAM})) {
-                    _converse.log('This server does not support XEP-0313, Message Archive Management');
-                    errback(null);
-                    return;
-                }
-                */
-                var queryid = _converse.connection.getUniqueId();
-                var attrs = {'type':'set'};
-                if (!_.isUndefined(options) && options.groupchat) {
-                    if (!options['with']) {
-                        throw new Error('You need to specify a "with" value containing the chat room JID, when querying groupchat messages.');
-                    }
-                    attrs.to = options['with'];
-                }
-                var stanza = $iq(attrs).c('query', {'xmlns':Strophe.NS.MAM, 'queryid':queryid});
-                if (!_.isUndefined(options)) {
-                    stanza.c('x', {'xmlns':Strophe.NS.XFORM, 'type': 'submit'})
-                            .c('field', {'var':'FORM_TYPE', 'type': 'hidden'})
-                            .c('value').t(Strophe.NS.MAM).up().up();
-
-                    if (options['with'] && !options.groupchat) {
-                        stanza.c('field', {'var':'with'}).c('value').t(options['with']).up().up();
-                    }
-                    _.each(['start', 'end'], function (t) {
-                        if (options[t]) {
-                            date = moment(options[t]);
-                            if (date.isValid()) {
-                                stanza.c('field', {'var':t}).c('value').t(date.format()).up().up();
-                            } else {
-                                throw new TypeError('archive.query: invalid date provided for: '+t);
-                            }
-                        }
-                    });
-                    stanza.up();
-                    if (options instanceof Strophe.RSM) {
-                        stanza.cnode(options.toXML());
-                    } else if (_.intersection(RSM_ATTRIBUTES, _.keys(options)).length) {
-                        stanza.cnode(new Strophe.RSM(options).toXML());
-                    }
-                }
-
-                if (_.isFunction(callback)) {
-                    _converse.connection.addHandler(function (message) {
-                        var $msg = $(message), rsm,
-                            $fin = $msg.find('fin[xmlns="'+Strophe.NS.MAM+'"]');
-                        if ($fin.length && $fin.attr('queryid') === queryid) {
-                            rsm = new Strophe.RSM({xml: $fin.find('set')[0]});
-                            _.extend(rsm, _.pick(options, ['max']));
-                            _.extend(rsm, _.pick(options, MAM_ATTRIBUTES));
-                            callback(messages, rsm);
-                            return false; // We've received all messages, decommission this handler
-                        } else if (queryid === $msg.find('result').attr('queryid')) {
-                            messages.push(message);
-                        }
-                        return true;
-                    }, Strophe.NS.MAM);
-                }
-                _converse.connection.sendIQ(stanza, null, errback, _converse.message_archiving_timeout);
-            };
-
-            _.extend(_converse.api, {
-                /* Extend default converse.js API to add methods specific to MAM
-                 */
-                'archive': {
-                    'query': _converse.queryForArchivedMessages.bind(_converse)
-                }
-            });
-
-            _converse.onMAMError = function (iq) {
-                if ($(iq).find('feature-not-implemented').length) {
-                    _converse.log("Message Archive Management (XEP-0313) not supported by this browser");
-                } else {
-                    _converse.log("An error occured while trying to set archiving preferences.");
-                    _converse.log(iq);
-                }
-            };
-
-            _converse.onMAMPreferences = function (feature, iq) {
-                /* Handle returned IQ stanza containing Message Archive
-                 * Management (XEP-0313) preferences.
-                 *
-                 * XXX: For now we only handle the global default preference.
-                 * The XEP also provides for per-JID preferences, which is
-                 * currently not supported in converse.js.
-                 *
-                 * Per JID preferences will be set in chat boxes, so it'll
-                 * probbaly be handled elsewhere in any case.
-                 */
-                var $prefs = $(iq).find('prefs[xmlns="'+Strophe.NS.MAM+'"]');
-                var default_pref = $prefs.attr('default');
-                var stanza;
-                if (default_pref !== _converse.message_archiving) {
-                    stanza = $iq({'type': 'set'}).c('prefs', {'xmlns':Strophe.NS.MAM, 'default':_converse.message_archiving});
-                    $prefs.children().each(function (idx, child) {
-                        stanza.cnode(child).up();
-                    });
-                    _converse.connection.sendIQ(stanza, _.partial(function (feature, iq) {
-                            // XXX: Strictly speaking, the server should respond with the updated prefs
-                            // (see example 18: https://xmpp.org/extensions/xep-0313.html#config)
-                            // but Prosody doesn't do this, so we don't rely on it.
-                            feature.save({'preferences': {'default':_converse.message_archiving}});
-                        }, feature),
-                        _converse.onMAMError
-                    );
-                } else {
-                    feature.save({'preferences': {'default':_converse.message_archiving}});
-                }
-            };
-
-
-            var onFeatureAdded = function (feature) {
-                var prefs = feature.get('preferences') || {};
-                if (feature.get('var') === Strophe.NS.MAM &&
-                        prefs['default'] !== _converse.message_archiving &&
-                        !_.isUndefined(_converse.message_archiving) ) {
-                    // Ask the server for archiving preferences
-                    _converse.connection.sendIQ(
-                        $iq({'type': 'get'}).c('prefs', {'xmlns': Strophe.NS.MAM}),
-                        _.partial(_converse.onMAMPreferences, feature),
-                        _.partial(_converse.onMAMError, feature)
-                    );
-                }
-            };
-            _converse.on('serviceDiscovered', onFeatureAdded.bind(_converse.features));
         }
     });
 }));
@@ -15685,671 +14854,6 @@ return __p
             _converse.allow_otr = _converse.allow_otr && HAS_CRYPTO;
             // Only use OTR by default if allow OTR is enabled to begin with
             _converse.use_otr_by_default = _converse.use_otr_by_default && _converse.allow_otr;
-        }
-    });
-}));
-
-
-define('tpl!register_panel', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '', __e = _.escape, __j = Array.prototype.join;
-function print() { __p += __j.call(arguments, '') }
-with (obj) {
-__p += '<form id="converse-register" class="pure-form converse-form">\n    <span class="reg-feedback"></span>\n    <label>' +
-__e(label_domain) +
-'</label>\n    ';
- if (default_domain) { ;
-__p += '\n    	' +
-__e(default_domain) +
-'\n    ';
- } ;
-__p += '\n    ';
- if (!default_domain) { ;
-__p += '\n    	<input type="text" name="domain" placeholder="' +
-__e(domain_placeholder) +
-'">\n        <p class="form-help">' +
-__e(help_providers) +
-' <a href="' +
-__e(href_providers) +
-'" class="url" target="_blank" rel="noopener">' +
-__e(help_providers_link) +
-'</a>.</p>\n        <input class="pure-button button-primary" type="submit" value="' +
-__e(label_register) +
-'">\n    ';
- } ;
-__p += '\n</form>\n';
-
-}
-return __p
-};});
-
-
-define('tpl!register_tab', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '', __e = _.escape;
-with (obj) {
-__p += '<li><a class="s" data-id="register" href="#register">' +
-__e(label_register) +
-'</a></li>\n';
-
-}
-return __p
-};});
-
-
-define('tpl!registration_form', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '', __e = _.escape;
-with (obj) {
-__p += '<p class="provider-title">' +
-__e(domain) +
-'</p>\n<a href=\'https://xmpp.net/result.php?domain=' +
-__e(domain) +
-'&amp;type=client\'>\n    <img class="provider-score" src=\'https://xmpp.net/badge.php?domain=' +
-__e(domain) +
-'\' alt=\'xmpp.net score\' />\n</a>\n<p class="title">' +
-__e(title) +
-'</p>\n<p class="instructions">' +
-__e(instructions) +
-'</p>\n';
-
-}
-return __p
-};});
-
-
-define('tpl!registration_request', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '', __e = _.escape, __j = Array.prototype.join;
-function print() { __p += __j.call(arguments, '') }
-with (obj) {
-__p += '<span class="spinner login-submit"></span>\n<p class="info">' +
-__e(info_message) +
-'</p>\n';
- if (cancel) { ;
-__p += '\n	<button class="pure-button button-cancel hor_centered">' +
-__e(cancel) +
-'</button>\n';
- } ;
-__p += '\n';
-
-}
-return __p
-};});
-
-// Converse.js (A browser based XMPP chat client)
-// http://conversejs.org
-//
-// Copyright (c) 2012-2017, Jan-Carel Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-/*global Backbone, define */
-
-/* This is a Converse.js plugin which add support for in-band registration
- * as specified in XEP-0077.
- */
-(function (root, factory) {
-    define('converse-register',["converse-core",
-            "tpl!form_username",
-            "tpl!register_panel",
-            "tpl!register_tab",
-            "tpl!registration_form",
-            "tpl!registration_request",
-            "converse-controlbox"
-    ], factory);
-}(this, function (
-            converse,
-            tpl_form_username,
-            tpl_register_panel,
-            tpl_register_tab,
-            tpl_registration_form,
-            tpl_registration_request) {
-
-    "use strict";
-
-    // Strophe methods for building stanzas
-    var Strophe = converse.env.Strophe,
-        utils = converse.env.utils,
-        $iq = converse.env.$iq;
-    // Other necessary globals
-    var $ = converse.env.jQuery,
-        _ = converse.env._;
-
-    // Add Strophe Namespaces
-    Strophe.addNamespace('REGISTER', 'jabber:iq:register');
-
-    // Add Strophe Statuses
-    var i = 0;
-    _.each(_.keys(Strophe.Status), function (key) {
-        i = Math.max(i, Strophe.Status[key]);
-    });
-    Strophe.Status.REGIFAIL        = i + 1;
-    Strophe.Status.REGISTERED      = i + 2;
-    Strophe.Status.CONFLICT        = i + 3;
-    Strophe.Status.NOTACCEPTABLE   = i + 5;
-
-    converse.plugins.add('converse-register', {
-
-        overrides: {
-            // Overrides mentioned here will be picked up by converse.js's
-            // plugin architecture they will replace existing methods on the
-            // relevant objects or classes.
-            //
-            // New functions which don't exist yet can also be added.
-
-            ControlBoxView: {
-
-                switchTab: function (ev) {
-                    var _converse = this.__super__._converse;
-                    var result = this.__super__.switchTab.apply(this, arguments);
-                    if (_converse.registration_domain &&
-                            ev.target.getAttribute('data-id') === "register" &&
-                            !this.model.get('registration_form_rendered')) {
-                        this.registerpanel.fetchRegistrationForm(_converse.registration_domain);
-                    }
-                    return result;
-                },
-
-                renderLoginPanel: function () {
-                    /* Also render a registration panel, when rendering the
-                     * login panel.
-                     */
-                    this.__super__.renderLoginPanel.apply(this, arguments);
-                    var _converse = this.__super__._converse;
-                    if (_converse.allow_registration) {
-                        this.registerpanel = new _converse.RegisterPanel({
-                            '$parent': this.$el.find('.controlbox-panes'),
-                            'model': this.model
-                        });
-                        this.registerpanel.render().$el.addClass('hidden');
-                    }
-                    return this;
-                }
-            }
-        },
-
-        initialize: function () {
-            /* The initialize function gets called as soon as the plugin is
-             * loaded by converse.js's plugin machinery.
-             */
-            var _converse = this._converse,
-                __ = _converse.__;
-
-            // Add new templates
-            _converse.templates.form_username = tpl_form_username;
-            _converse.templates.register_panel = tpl_register_panel;
-            _converse.templates.register_tab = tpl_register_tab;
-            _converse.templates.registration_form = tpl_registration_form;
-            _converse.templates.registration_request = tpl_registration_request;
-
-            this.updateSettings({
-                allow_registration: true,
-                domain_placeholder: __(" e.g. conversejs.org"),  // Placeholder text shown in the domain input on the registration form
-                providers_link: 'https://xmpp.net/directory.php', // Link to XMPP providers shown on registration page
-            });
-
-            _converse.RegisterPanel = Backbone.View.extend({
-                tagName: 'div',
-                id: "register",
-                className: 'controlbox-pane',
-                events: {
-                    'submit form#converse-register': 'onProviderChosen'
-                },
-
-                initialize: function (cfg) {
-                    this.reset();
-                    this.$parent = cfg.$parent;
-                    this.$tabs = cfg.$parent.parent().find('#controlbox-tabs');
-                    this.registerHooks();
-                },
-
-                render: function () {
-                    this.model.set('registration_form_rendered', false);
-                    this.$parent.append(this.$el.html(
-                        tpl_register_panel({
-                            'default_domain': _converse.registration_domain,
-                            'label_domain': __("Your XMPP provider's domain name:"),
-                            'label_register': __('Fetch registration form'),
-                            'help_providers': __('Tip: A list of public XMPP providers is available'),
-                            'help_providers_link': __('here'),
-                            'href_providers': _converse.providers_link,
-                            'domain_placeholder': _converse.domain_placeholder
-                        })
-                    ));
-                    this.$tabs.append(tpl_register_tab({label_register: __('Register')}));
-                    return this;
-                },
-
-                registerHooks: function () {
-                    /* Hook into Strophe's _connect_cb, so that we can send an IQ
-                     * requesting the registration fields.
-                     */
-                    var conn = _converse.connection;
-                    var connect_cb = conn._connect_cb.bind(conn);
-                    conn._connect_cb = function (req, callback, raw) {
-                        if (!this._registering) {
-                            connect_cb(req, callback, raw);
-                        } else {
-                            if (this.getRegistrationFields(req, callback, raw)) {
-                                this._registering = false;
-                            }
-                        }
-                    }.bind(this);
-                },
-
-                getRegistrationFields: function (req, _callback, raw) {
-                    /*  Send an IQ stanza to the XMPP server asking for the
-                     *  registration fields.
-                     *  Parameters:
-                     *    (Strophe.Request) req - The current request
-                     *    (Function) callback
-                     */
-                    var conn = _converse.connection;
-                    conn.connected = true;
-
-                    var body = conn._proto._reqToData(req);
-                    if (!body) { return; }
-                    if (conn._proto._connect_cb(body) === Strophe.Status.CONNFAIL) {
-                        return false;
-                    }
-                    var register = body.getElementsByTagName("register");
-                    var mechanisms = body.getElementsByTagName("mechanism");
-                    if (register.length === 0 && mechanisms.length === 0) {
-                        conn._proto._no_auth_received(_callback);
-                        return false;
-                    }
-                    if (register.length === 0) {
-                        conn._changeConnectStatus(
-                            Strophe.Status.REGIFAIL,
-                            __("Sorry, the given provider does not support in "+
-                               "band account registration. Please try with a "+
-                               "different provider.")
-                        );
-                        return true;
-                    }
-                    // Send an IQ stanza to get all required data fields
-                    conn._addSysHandler(this.onRegistrationFields.bind(this), null, "iq", null, null);
-                    conn.send($iq({type: "get"}).c("query", {xmlns: Strophe.NS.REGISTER}).tree());
-                    conn.connected = false;
-                    return true;
-                },
-
-                onRegistrationFields: function (stanza) {
-                    /*  Handler for Registration Fields Request.
-                     *
-                     *  Parameters:
-                     *    (XMLElement) elem - The query stanza.
-                     */
-                    if (stanza.getElementsByTagName("query").length !== 1) {
-                        _converse.connection._changeConnectStatus(Strophe.Status.REGIFAIL, "unknown");
-                        return false;
-                    }
-                    this.setFields(stanza);
-                    this.renderRegistrationForm(stanza);
-                    return false;
-                },
-
-                reset: function (settings) {
-                    var defaults = {
-                        fields: {},
-                        urls: [],
-                        title: "",
-                        instructions: "",
-                        registered: false,
-                        _registering: false,
-                        domain: null,
-                        form_type: null
-                    };
-                    _.extend(this, defaults);
-                    if (settings) {
-                        _.extend(this, _.pick(settings, _.keys(defaults)));
-                    }
-                },
-
-                onProviderChosen: function (ev) {
-                    /* Callback method that gets called when the user has chosen an
-                     * XMPP provider.
-                     *
-                     * Parameters:
-                     *      (Submit Event) ev - Form submission event.
-                     */
-                    if (ev && ev.preventDefault) { ev.preventDefault(); }
-                    var $form = $(ev.target),
-                        $domain_input = $form.find('input[name=domain]'),
-                        domain = $domain_input.val();
-                    if (!domain) {
-                        $domain_input.addClass('error');
-                        return;
-                    }
-                    $form.find('input[type=submit]').hide();
-                    this.fetchRegistrationForm(domain, __('Cancel'));
-                },
-
-                fetchRegistrationForm: function (domain_name, cancel_label) {
-                    /* This is called with a domain name based on which, it fetches a
-                     * registration form from the requested domain.
-                     *
-                     * Parameters:
-                     *      (Domain name) domain_name - XMPP server domain
-                     */
-                    this.renderRegistrationRequest(cancel_label);
-                    this.reset({
-                        domain: Strophe.getDomainFromJid(domain_name),
-                        _registering: true
-                    });
-                    _converse.connection.connect(this.domain, "", this.onRegistering.bind(this));
-                    return false;
-                },
-
-                renderRegistrationRequest: function (cancel_label) {
-                    var form = this.el.querySelector('#converse-register');
-                    utils.createElementsFromString(
-                        form,
-                        tpl_registration_request({
-                            cancel: cancel_label,
-                            info_message: _converse.__('Requesting a registration form from the XMPP server')
-                        })
-                    );
-                    if (!_converse.registration_domain) {
-                        var cancel_button = document.querySelector('button.button-cancel');
-                        cancel_button.addEventListener('click', this.cancelRegistration.bind(this));
-                    }
-                },
-
-                giveFeedback: function (message, klass) {
-                    this.$('.reg-feedback').attr('class', 'reg-feedback').text(message);
-                    if (klass) {
-                        $('.reg-feedback').addClass(klass);
-                    }
-                },
-
-                onRegistering: function (status, error) {
-                    var that;
-                    _converse.log('onRegistering');
-                    if (_.includes([
-                                Strophe.Status.DISCONNECTED,
-                                Strophe.Status.CONNFAIL,
-                                Strophe.Status.REGIFAIL,
-                                Strophe.Status.NOTACCEPTABLE,
-                                Strophe.Status.CONFLICT
-                            ], status)) {
-
-                        _converse.log('Problem during registration: Strophe.Status is: '+status);
-                        this.cancelRegistration();
-                        if (error) {
-                            this.giveFeedback(error, 'error');
-                        } else {
-                            this.giveFeedback(__(
-                                'Something went wrong while establishing a connection with "%1$s". Are you sure it exists?',
-                                this.domain
-                            ), 'error');
-                        }
-                    } else if (status === Strophe.Status.REGISTERED) {
-                        _converse.log("Registered successfully.");
-                        _converse.connection.reset();
-                        that = this;
-                        this.$('form').hide(function () {
-                            $(this).replaceWith('<span class="spinner centered"/>');
-                            if (that.fields.password && that.fields.username) {
-                                // automatically log the user in
-                                _converse.connection.connect(
-                                    that.fields.username.toLowerCase()+'@'+that.domain.toLowerCase(),
-                                    that.fields.password,
-                                    _converse.onConnectStatusChanged
-                                );
-                                _converse.chatboxviews.get('controlbox')
-                                    .switchTab({'target': that.$tabs.find('.current')});
-                                _converse.giveFeedback(__('Now logging you in'));
-                            } else {
-                                _converse.chatboxviews.get('controlbox').renderLoginPanel();
-                                _converse.giveFeedback(__('Registered successfully'));
-                            }
-                            that.reset();
-                        });
-                    }
-                },
-
-                renderRegistrationForm: function (stanza) {
-                    /* Renders the registration form based on the XForm fields
-                     * received from the XMPP server.
-                     *
-                     * Parameters:
-                     *      (XMLElement) stanza - The IQ stanza received from the XMPP server.
-                     */
-                    this.model.set('registration_form_rendered', true);
-
-                    var $form = this.$('form'),
-                        $stanza = $(stanza),
-                        $fields, $input;
-                    $form.empty().append(tpl_registration_form({
-                        'domain': this.domain,
-                        'title': this.title,
-                        'instructions': this.instructions
-                    }));
-                    if (this.form_type === 'xform') {
-                        $fields = $stanza.find('field');
-                        _.each($fields, function (field) {
-                            $form.append(utils.xForm2webForm.bind(this, $(field), $stanza));
-                        }.bind(this));
-                    } else {
-                        // Show fields
-                        _.each(_.keys(this.fields), function (key) {
-                            if (key === "username") {
-                                $input = tpl_form_username({
-                                    domain: ' @'+this.domain,
-                                    name: key,
-                                    type: "text",
-                                    label: key,
-                                    value: '',
-                                    required: 1
-                                });
-                            } else {
-                                $form.append('<label>'+key+'</label>');
-                                $input = $('<input placeholder="'+key+'" name="'+key+'"></input>');
-                                if (key === 'password' || key === 'email') {
-                                    $input.attr('type', key);
-                                }
-                            }
-                            $form.append($input);
-                        }.bind(this));
-                        // Show urls
-                        _.each(this.urls, function (url) {
-                            $form.append($('<a target="blank"></a>').attr('href', url).text(url));
-                        }.bind(this));
-                    }
-                    if (this.fields) {
-                        $form.append('<input type="submit" class="pure-button button-primary" value="'+__('Register')+'"/>');
-                        $form.on('submit', this.submitRegistrationForm.bind(this));
-                        $form.append('<input type="button" class="pure-button button-cancel" value="'+__('Cancel')+'"/>');
-                        $form.find('input[type=button]').on('click', this.cancelRegistration.bind(this));
-                    } else {
-                        $form.append('<input type="button" class="submit" value="'+__('Return')+'"/>');
-                        $form.find('input[type=button]').on('click', this.cancelRegistration.bind(this));
-                    }
-                    if (_converse.registration_domain) {
-                        $form.find('input[type=button]').hide();
-                    }
-                },
-
-                reportErrors: function (stanza) {
-                    /* Report back to the user any error messages received from the
-                     * XMPP server after attempted registration.
-                     *
-                     * Parameters:
-                     *      (XMLElement) stanza - The IQ stanza received from the
-                     *      XMPP server.
-                     */
-                    var $form= this.$('form'), flash;
-                    var $errmsgs = $(stanza).find('error text');
-                    var $flash = $form.find('.form-errors');
-                    if (!$flash.length) {
-                    flash = '<legend class="form-errors"></legend>';
-                        if ($form.find('p.instructions').length) {
-                            $form.find('p.instructions').append(flash);
-                        } else {
-                            $form.prepend(flash);
-                        }
-                        $flash = $form.find('.form-errors');
-                    } else {
-                        $flash.empty();
-                    }
-                    $errmsgs.each(function (idx, txt) {
-                        $flash.append($('<p>').text($(txt).text()));
-                    });
-                    if (!$errmsgs.length) {
-                        $flash.append($('<p>').text(
-                            __('The provider rejected your registration attempt. '+
-                            'Please check the values you entered for correctness.')));
-                    }
-                    $flash.show();
-                },
-
-                cancelRegistration: function (ev) {
-                    /* Handler, when the user cancels the registration form.
-                     */
-                    if (ev && ev.preventDefault) { ev.preventDefault(); }
-                    _converse.connection.reset();
-                    this.model.set('registration_form_rendered', false);
-                    this.render();
-                    if (_converse.registration_domain) {
-                        document.querySelector('button.button-cancel').onclick = 
-                            _.bind(
-                                this.fetchRegistrationForm, this,
-                                _converse.registration_domain, __('Retry')
-                            );
-                    }
-                },
-
-                submitRegistrationForm: function (ev) {
-                    /* Handler, when the user submits the registration form.
-                     * Provides form error feedback or starts the registration
-                     * process.
-                     *
-                     * Parameters:
-                     *      (Event) ev - the submit event.
-                     */
-                    if (ev && ev.preventDefault) { ev.preventDefault(); }
-                    var has_empty_inputs = _.reduce(this.el.querySelectorAll('input.required'),
-                        function (result, input) {
-                            if (input.value === '') {
-                                input.classList.add('error');
-                                return result + 1;
-                            }
-                            return result;
-                        }, 0);
-                    if (has_empty_inputs) { return; }
-                    var $inputs = $(ev.target).find(':input:not([type=button]):not([type=submit])'),
-                        iq = $iq({type: "set"}).c("query", {xmlns:Strophe.NS.REGISTER});
-
-                    if (this.form_type === 'xform') {
-                        iq.c("x", {xmlns: Strophe.NS.XFORM, type: 'submit'});
-                        $inputs.each(function () {
-                            iq.cnode(utils.webForm2xForm(this)).up();
-                        });
-                    } else {
-                        $inputs.each(function () {
-                            var $input = $(this);
-                            iq.c($input.attr('name'), {}, $input.val());
-                        });
-                    }
-                    this.model.set('registration_form_rendered', false);
-                    _converse.connection._addSysHandler(this._onRegisterIQ.bind(this), null, "iq", null, null);
-                    _converse.connection.send(iq);
-                    this.setFields(iq.tree());
-                },
-
-                setFields: function (stanza) {
-                    /* Stores the values that will be sent to the XMPP server
-                     * during attempted registration.
-                     *
-                     * Parameters:
-                     *      (XMLElement) stanza - the IQ stanza that will be sent to the XMPP server.
-                     */
-                    var $query = $(stanza).find('query'), $xform;
-                    if ($query.length > 0) {
-                        $xform = $query.find('x[xmlns="'+Strophe.NS.XFORM+'"]');
-                        if ($xform.length > 0) {
-                            this._setFieldsFromXForm($xform);
-                        } else {
-                            this._setFieldsFromLegacy($query);
-                        }
-                    }
-                },
-
-                _setFieldsFromLegacy: function ($query) {
-                    $query.children().each(function (idx, field) {
-                        var $field = $(field);
-                        if (field.tagName.toLowerCase() === 'instructions') {
-                            this.instructions = Strophe.getText(field);
-                            return;
-                        } else if (field.tagName.toLowerCase() === 'x') {
-                            if ($field.attr('xmlns') === 'jabber:x:oob') {
-                                $field.find('url').each(function (idx, url) {
-                                    this.urls.push($(url).text());
-                                }.bind(this));
-                            }
-                            return;
-                        }
-                        this.fields[field.tagName.toLowerCase()] = Strophe.getText(field);
-                    }.bind(this));
-                    this.form_type = 'legacy';
-                },
-
-                _setFieldsFromXForm: function ($xform) {
-                    this.title = $xform.find('title').text();
-                    this.instructions = $xform.find('instructions').text();
-                    $xform.find('field').each(function (idx, field) {
-                        var _var = field.getAttribute('var');
-                        if (_var) {
-                            this.fields[_var.toLowerCase()] = $(field).children('value').text();
-                        } else {
-                            // TODO: other option seems to be type="fixed"
-                            _converse.log("WARNING: Found field we couldn't parse");
-                        }
-                    }.bind(this));
-                    this.form_type = 'xform';
-                },
-
-                _onRegisterIQ: function (stanza) {
-                    /* Callback method that gets called when a return IQ stanza
-                     * is received from the XMPP server, after attempting to
-                     * register a new user.
-                     *
-                     * Parameters:
-                     *      (XMLElement) stanza - The IQ stanza.
-                     */
-                    var error = null,
-                        query = stanza.getElementsByTagName("query");
-                    if (query.length > 0) {
-                        query = query[0];
-                    }
-                    if (stanza.getAttribute("type") === "error") {
-                        _converse.log("Registration failed.");
-                        error = stanza.getElementsByTagName("error");
-                        if (error.length !== 1) {
-                            _converse.connection._changeConnectStatus(Strophe.Status.REGIFAIL, "unknown");
-                            return false;
-                        }
-                        error = error[0].firstChild.tagName.toLowerCase();
-                        if (error === 'conflict') {
-                            _converse.connection._changeConnectStatus(Strophe.Status.CONFLICT, error);
-                        } else if (error === 'not-acceptable') {
-                            _converse.connection._changeConnectStatus(Strophe.Status.NOTACCEPTABLE, error);
-                        } else {
-                            _converse.connection._changeConnectStatus(Strophe.Status.REGIFAIL, error);
-                        }
-                        this.reportErrors(stanza);
-                    } else {
-                        _converse.connection._changeConnectStatus(Strophe.Status.REGISTERED, null);
-                    }
-                    return false;
-                },
-
-                remove: function () {
-                    this.$tabs.empty();
-                    this.$el.parent().empty();
-                }
-            });
         }
     });
 }));
@@ -17329,488 +15833,6 @@ return __p
     });
 }));
 
-
-define('tpl!dragresize', ['lodash'], function(_) {return function(obj) {
-obj || (obj = {});
-var __t, __p = '';
-with (obj) {
-__p += '<div class="dragresize dragresize-top"></div>\n<div class="dragresize dragresize-topleft"></div>\n<div class="dragresize dragresize-left"></div>\n';
-
-}
-return __p
-};});
-
-// Converse.js (A browser based XMPP chat client)
-// http://conversejs.org
-//
-// Copyright (c) 2012-2017, Jan-Carel Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-/*global define, window */
-
-(function (root, factory) {
-    define('converse-dragresize',[
-            "converse-core",
-            "tpl!dragresize",
-            "converse-chatview",
-            "converse-muc", // XXX: would like to remove this
-            "converse-controlbox"
-    ], factory);
-}(this, function (converse, tpl_dragresize) {
-    "use strict";
-    var $ = converse.env.jQuery,
-        _ = converse.env._;
-
-    converse.plugins.add('converse-dragresize', {
-        /* Optional dependencies are other plugins which might be
-         * overridden or relied upon, and therefore need to be loaded before
-         * this plugin. They are called "optional" because they might not be
-         * available, in which case any overrides applicable to them will be
-         * ignored.
-         *
-         * It's possible however to make optional dependencies non-optional.
-         * If the setting "strict_plugin_dependencies" is set to true,
-         * an error will be raised if the plugin is not found.
-         *
-         * NB: These plugins need to have already been loaded via require.js.
-         */
-        optional_dependencies: ["converse-headline"],
-
-        overrides: {
-            // Overrides mentioned here will be picked up by converse.js's
-            // plugin architecture they will replace existing methods on the
-            // relevant objects or classes.
-            //
-            // New functions which don't exist yet can also be added.
-
-            registerGlobalEventHandlers: function () {
-                var that = this;
-                
-                $(document).on('mousemove', function (ev) {
-                    if (!that.resizing || !that.allow_dragresize) { return true; }
-                    ev.preventDefault();
-                    that.resizing.chatbox.resizeChatBox(ev);
-                });
-
-                $(document).on('mouseup', function (ev) {
-                    if (!that.resizing || !that.allow_dragresize) { return true; }
-                    ev.preventDefault();
-                    var height = that.applyDragResistance(
-                            that.resizing.chatbox.height,
-                            that.resizing.chatbox.model.get('default_height')
-                    );
-                    var width = that.applyDragResistance(
-                            that.resizing.chatbox.width,
-                            that.resizing.chatbox.model.get('default_width')
-                    );
-                    if (that.connection.connected) {
-                        that.resizing.chatbox.model.save({'height': height});
-                        that.resizing.chatbox.model.save({'width': width});
-                    } else {
-                        that.resizing.chatbox.model.set({'height': height});
-                        that.resizing.chatbox.model.set({'width': width});
-                    }
-                    that.resizing = null;
-                });
-
-                return this.__super__.registerGlobalEventHandlers.apply(this, arguments);
-            },
-
-            ChatBox: {
-                initialize: function () {
-                    var _converse = this.__super__._converse;
-                    var result = this.__super__.initialize.apply(this, arguments),
-                        height = this.get('height'), width = this.get('width'),
-                        save = this.get('id') === 'controlbox' ? this.set.bind(this) : this.save.bind(this);
-                    save({
-                        'height': _converse.applyDragResistance(height, this.get('default_height')),
-                        'width': _converse.applyDragResistance(width, this.get('default_width')),
-                    });
-                    return result;
-                }
-            },
-
-            ChatBoxView: {
-                events: {
-                    'mousedown .dragresize-top': 'onStartVerticalResize',
-                    'mousedown .dragresize-left': 'onStartHorizontalResize',
-                    'mousedown .dragresize-topleft': 'onStartDiagonalResize'
-                },
-
-                initialize: function () {
-                    $(window).on('resize', _.debounce(this.setDimensions.bind(this), 100));
-                    this.__super__.initialize.apply(this, arguments);
-                },
-
-                render: function () {
-                    var result = this.__super__.render.apply(this, arguments);
-                    this.setWidth();
-                    return result;
-                },
-
-                setWidth: function () {
-                    // If a custom width is applied (due to drag-resizing),
-                    // then we need to set the width of the .chatbox element as well.
-                    if (this.model.get('width')) {
-                        this.$el.css('width', this.model.get('width'));
-                    }
-                },
-
-                _show: function () {
-                    this.initDragResize().setDimensions();
-                    this.__super__._show.apply(this, arguments);
-                },
-
-                initDragResize: function () {
-                    /* Determine and store the default box size.
-                     * We need this information for the drag-resizing feature.
-                     */
-                    var _converse = this.__super__._converse;
-                    var $flyout = this.$el.find('.box-flyout');
-                    if (_.isUndefined(this.model.get('height'))) {
-                        var height = $flyout.height();
-                        var width = $flyout.width();
-                        this.model.set('height', height);
-                        this.model.set('default_height', height);
-                        this.model.set('width', width);
-                        this.model.set('default_width', width);
-                    }
-                    var min_width = $flyout.css('min-width');
-                    var min_height = $flyout.css('min-height');
-                    this.model.set('min_width', min_width.endsWith('px') ? Number(min_width.replace(/px$/, '')) :0);
-                    this.model.set('min_height', min_height.endsWith('px') ? Number(min_height.replace(/px$/, '')) :0);
-                    // Initialize last known mouse position
-                    this.prev_pageY = 0;
-                    this.prev_pageX = 0;
-                    if (_converse.connection.connected) {
-                        this.height = this.model.get('height');
-                        this.width = this.model.get('width');
-                    }
-                    return this;
-                },
-
-                setDimensions: function () {
-                    // Make sure the chat box has the right height and width.
-                    this.adjustToViewport();
-                    this.setChatBoxHeight(this.model.get('height'));
-                    this.setChatBoxWidth(this.model.get('width'));
-                },
-
-                setChatBoxHeight: function (height) {
-                    var _converse = this.__super__._converse;
-                    if (height) {
-                        height = _converse.applyDragResistance(height, this.model.get('default_height'))+'px';
-                    } else {
-                        height = "";
-                    }
-                    this.$el.children('.box-flyout')[0].style.height = height;
-                },
-
-                setChatBoxWidth: function (width) {
-                    var _converse = this.__super__._converse;
-                    if (width) {
-                        width = _converse.applyDragResistance(width, this.model.get('default_width'))+'px';
-                    } else {
-                        width = "";
-                    }
-                    this.$el[0].style.width = width;
-                    this.$el.children('.box-flyout')[0].style.width = width;
-                },
-
-
-                adjustToViewport: function () {
-                    /* Event handler called when viewport gets resized. We remove
-                     * custom width/height from chat boxes.
-                     */
-                    var viewport_width = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
-                    var viewport_height = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
-                    if (viewport_width <= 480) {
-                        this.model.set('height', undefined);
-                        this.model.set('width', undefined);
-                    } else if (viewport_width <= this.model.get('width')) {
-                        this.model.set('width', undefined);
-                    } else if (viewport_height <= this.model.get('height')) {
-                        this.model.set('height', undefined);
-                    }
-                },
-
-                onStartVerticalResize: function (ev) {
-                    var _converse = this.__super__._converse;
-                    if (!_converse.allow_dragresize) { return true; }
-                    // Record element attributes for mouseMove().
-                    this.height = this.$el.children('.box-flyout').height();
-                    _converse.resizing = {
-                        'chatbox': this,
-                        'direction': 'top'
-                    };
-                    this.prev_pageY = ev.pageY;
-                },
-
-                onStartHorizontalResize: function (ev) {
-                    var _converse = this.__super__._converse;
-                    if (!_converse.allow_dragresize) { return true; }
-                    this.width = this.$el.children('.box-flyout').width();
-                    _converse.resizing = {
-                        'chatbox': this,
-                        'direction': 'left'
-                    };
-                    this.prev_pageX = ev.pageX;
-                },
-
-                onStartDiagonalResize: function (ev) {
-                    var _converse = this.__super__._converse;
-                    this.onStartHorizontalResize(ev);
-                    this.onStartVerticalResize(ev);
-                    _converse.resizing.direction = 'topleft';
-                },
-
-                resizeChatBox: function (ev) {
-                    var diff;
-                    var _converse = this.__super__._converse;
-                    if (_converse.resizing.direction.indexOf('top') === 0) {
-                        diff = ev.pageY - this.prev_pageY;
-                        if (diff) {
-                            this.height = ((this.height-diff) > (this.model.get('min_height') || 0)) ? (this.height-diff) : this.model.get('min_height');
-                            this.prev_pageY = ev.pageY;
-                            this.setChatBoxHeight(this.height);
-                        }
-                    }
-                    if (_.includes(_converse.resizing.direction, 'left')) {
-                        diff = this.prev_pageX - ev.pageX;
-                        if (diff) {
-                            this.width = ((this.width+diff) > (this.model.get('min_width') || 0)) ? (this.width+diff) : this.model.get('min_width');
-                            this.prev_pageX = ev.pageX;
-                            this.setChatBoxWidth(this.width);
-                        }
-                    }
-                }
-            },
-
-            HeadlinesBoxView: {
-                events: {
-                    'mousedown .dragresize-top': 'onStartVerticalResize',
-                    'mousedown .dragresize-left': 'onStartHorizontalResize',
-                    'mousedown .dragresize-topleft': 'onStartDiagonalResize'
-                },
-
-                initialize: function () {
-                    $(window).on('resize', _.debounce(this.setDimensions.bind(this), 100));
-                    return this.__super__.initialize.apply(this, arguments);
-                },
-
-                render: function () {
-                    $(window).on('resize', _.debounce(this.setWidth.bind(this), 100));
-                    return this.__super__.render.apply(this, arguments);
-                }
-            },
-
-            ControlBoxView: {
-                events: {
-                    'mousedown .dragresize-top': 'onStartVerticalResize',
-                    'mousedown .dragresize-left': 'onStartHorizontalResize',
-                    'mousedown .dragresize-topleft': 'onStartDiagonalResize'
-                },
-
-                initialize: function () {
-                    $(window).on('resize', _.debounce(this.setDimensions.bind(this), 100));
-                    this.__super__.initialize.apply(this, arguments);
-                },
-
-                renderLoginPanel: function () {
-                    var result = this.__super__.renderLoginPanel.apply(this, arguments);
-                    this.initDragResize().setDimensions();
-                    return result;
-                },
-
-                renderContactsPanel: function () {
-                    var result = this.__super__.renderContactsPanel.apply(this, arguments);
-                    this.initDragResize().setDimensions();
-                    return result;
-                }
-            },
-
-            ChatRoomView: {
-                events: {
-                    'mousedown .dragresize-top': 'onStartVerticalResize',
-                    'mousedown .dragresize-left': 'onStartHorizontalResize',
-                    'mousedown .dragresize-topleft': 'onStartDiagonalResize'
-                },
-
-                initialize: function () {
-                    $(window).on('resize', _.debounce(this.setDimensions.bind(this), 100));
-                    this.__super__.initialize.apply(this, arguments);
-                },
-
-                render: function () {
-                    var result = this.__super__.render.apply(this, arguments);
-                    this.renderDragResizeHandles();
-                    this.setWidth();
-                    return result;
-                },
-
-                renderDragResizeHandles: function () {
-                    var _converse = this.__super__._converse;
-                    var flyout = this.el.querySelector('.box-flyout');
-                    var div = document.createElement('div');
-                    div.innerHTML = tpl_dragresize();
-                    flyout.insertBefore(
-                        div,
-                        flyout.firstChild
-                    );
-                }
-            }
-        },
-
-        initialize: function () {
-            /* The initialize function gets called as soon as the plugin is
-             * loaded by converse.js's plugin machinery.
-             */
-            var _converse = this._converse;
-
-            this.updateSettings({
-                allow_dragresize: true,
-            });
-
-            _converse.applyDragResistance = function (value, default_value) {
-                /* This method applies some resistance around the
-                * default_value. If value is close enough to
-                * default_value, then default_value is returned instead.
-                */
-                if (_.isUndefined(value)) {
-                    return undefined;
-                } else if (_.isUndefined(default_value)) {
-                    return value;
-                }
-                var resistance = 10;
-                if ((value !== default_value) &&
-                    (Math.abs(value- default_value) < resistance)) {
-                    return default_value;
-                }
-                return value;
-            };
-        }
-    });
-}));
-
-// Converse.js (A browser based XMPP chat client)
-// http://conversejs.org
-//
-// Copyright (c) 2012-2017, Jan-Carel Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-/*global define */
-
-(function (root, factory) {
-    define('converse-headline',[
-            "converse-core",
-            "tpl!chatbox",
-            "converse-chatview",
-    ], factory);
-}(this, function (converse, tpl_chatbox) {
-    "use strict";
-    var _ = converse.env._,
-        utils = converse.env.utils;
-
-    converse.plugins.add('converse-headline', {
-
-        overrides: {
-            // Overrides mentioned here will be picked up by converse.js's
-            // plugin architecture they will replace existing methods on the
-            // relevant objects or classes.
-            //
-            // New functions which don't exist yet can also be added.
-
-            ChatBoxViews: {
-                onChatBoxAdded: function (item) {
-                    var _converse = this.__super__._converse;
-                    var view = this.get(item.get('id'));
-                    if (!view && item.get('type') === 'headline') {
-                        view = new _converse.HeadlinesBoxView({model: item});
-                        this.add(item.get('id'), view);
-                        return view;
-                    } else {
-                        return this.__super__.onChatBoxAdded.apply(this, arguments);
-                    }
-                }
-            }
-        },
-
-        initialize: function () {
-            /* The initialize function gets called as soon as the plugin is
-             * loaded by converse.js's plugin machinery.
-             */
-            var _converse = this._converse,
-                __ = _converse.__;
-
-            _converse.HeadlinesBoxView = _converse.ChatBoxView.extend({
-                className: 'chatbox headlines',
-
-                events: {
-                    'click .close-chatbox-button': 'close',
-                    'click .toggle-chatbox-button': 'minimize',
-                    'keypress textarea.chat-textarea': 'keyPressed'
-                },
-
-                initialize: function () {
-                    this.disable_mam = true; // Don't do MAM queries for this box
-                    this.model.messages.on('add', this.onMessageAdded, this);
-                    this.model.on('show', this.show, this);
-                    this.model.on('destroy', this.hide, this);
-                    this.model.on('change:minimized', this.onMinimizedChanged, this);
-                    this.render().fetchMessages().insertIntoDOM().hide();
-                    _converse.emit('chatBoxInitialized', this);
-                },
-
-                render: function () {
-                    this.$el.attr('id', this.model.get('box_id'))
-                        .html(tpl_chatbox(
-                                _.extend(this.model.toJSON(), {
-                                        show_toolbar: _converse.show_toolbar,
-                                        show_textarea: false,
-                                        show_send_button: _converse.show_send_button,
-                                        title: this.model.get('fullname'),
-                                        unread_msgs: __('You have unread messages'),
-                                        info_close: __('Close this box'),
-                                        label_personal_message: ''
-                                    }
-                                )
-                            )
-                        );
-                    this.$content = this.$el.find('.chat-content');
-                    _converse.emit('chatBoxOpened', this);
-                    utils.refreshWebkit();
-                    return this;
-                }
-            });
-
-            var onHeadlineMessage = function (message) {
-                /* Handler method for all incoming messages of type "headline". */
-                var from_jid = message.getAttribute('from');
-                if (utils.isHeadlineMessage(message)) {
-                    if (_.includes(from_jid, '@') && !_converse.allow_non_roster_messaging) {
-                        return;
-                    }
-                    _converse.chatboxes.create({
-                        'id': from_jid,
-                        'jid': from_jid,
-                        'fullname':  from_jid,
-                        'type': 'headline'
-                    }).createMessage(message, undefined, message);
-                    _converse.emit('message', message);
-                }
-                return true;
-            };
-
-            var registerHeadlineHandler = function () {
-                _converse.connection.addHandler(
-                        onHeadlineMessage, null, 'message');
-            };
-            _converse.on('connected', registerHeadlineHandler);
-            _converse.on('reconnected', registerHeadlineHandler);
-        }
-    });
-}));
-
 /*global define */
 if (typeof define !== 'undefined') {
     // The section below determines which plugins will be included in a build
@@ -17826,17 +15848,17 @@ if (typeof define !== 'undefined') {
          */
         "converse-chatview",    // Renders standalone chat boxes for single user chat
         "converse-controlbox",  // The control box
-        "converse-bookmarks",   // XEP-0048 Bookmarks
-        "converse-mam",         // XEP-0313 Message Archive Management
+        // "converse-bookmarks",   // XEP-0048 Bookmarks
+        // "converse-mam",         // XEP-0313 Message Archive Management
         "converse-muc",         // XEP-0045 Multi-user chat
         "converse-vcard",       // XEP-0054 VCard-temp
         "converse-otr",         // Off-the-record encryption for one-on-one messages
-        "converse-register",    // XEP-0077 In-band registration
+        // "converse-register",    // XEP-0077 In-band registration
         "converse-ping",        // XEP-0199 XMPP Ping
         "converse-notification",// HTML5 Notifications
         "converse-minimize",    // Allows chat boxes to be minimized
-        "converse-dragresize",  // Allows chat boxes to be resized by dragging them
-        "converse-headline",    // Support for headline messages
+        // "converse-dragresize",  // Allows chat boxes to be resized by dragging them
+        // "converse-headline",    // Support for headline messages
         /* END: Removable components */
     ], function (converse) {
         return converse;

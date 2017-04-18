@@ -12,10 +12,10 @@
         display: block;
         position: absolute;
         @media screen and (max-height: $mobile-landscape-height) {
-            bottom: 0;
+            bottom: 6px;
         }
         @media screen and (max-width: $mobile-portrait-length) {
-            bottom: 0;
+            bottom: 6px;
         }
     }
     .chat-head {
@@ -97,15 +97,15 @@
             min-width: $chat-width;
             width: $chat-width;
             z-index: 1;
-            @media screen and (max-height: $mobile-landscape-height) {
+            @media all and (max-height: $mobile-landscape-height) {
                 height: $mobile-chat-height;
                 width: $mobile-chat-width;
-                height: 100vh;
+                height: 98vh;
             }
-            @media screen and (max-width: $mobile-portrait-length) {
+            @media all and (max-width: $mobile-portrait-length) {
                 height: $mobile-chat-height;
                 width: $mobile-chat-width;
-                height: 100vh;
+                height: 98vh;
             }
         }
         .chat-title {

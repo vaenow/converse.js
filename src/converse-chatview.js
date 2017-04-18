@@ -171,6 +171,9 @@
                 },
 
                 showStatusNotification: function (message, keep_old, permanent) {
+
+                    // console.log('info', message)
+
                     if (!keep_old) {
                         this.clearStatusNotification();
                     }
@@ -449,6 +452,13 @@
                 },
 
                 onMessageAdded: function (message) {
+
+                    var attrs = message.attributes;
+                    if(attrs) {
+                        console.log(attrs.fullname, JSON.stringify(attrs));
+                    }
+
+
                     /* Handler that gets called when a new message object is created.
                      *
                      * Parameters:
@@ -468,13 +478,29 @@
                 },
 
                 createMessageStanza: function (message) {
+                    var me = this;
                     return $msg({
                                 from: _converse.connection.jid,
                                 to: this.model.get('jid'),
                                 type: 'chat',
                                 id: message.get('msgid')
-                        }).c('body').t(message.get('message')).up()
-                            .c(_converse.ACTIVE, {'xmlns': Strophe.NS.CHATSTATES}).up();
+                        })
+                        .c('body')
+                        .t(message.get('message'))
+                        .up()
+
+                        .c('subject')
+                        .t(me.getSenderSubject())
+                        .up()
+
+                        .c(_converse.ACTIVE, {'xmlns': Strophe.NS.CHATSTATES})
+                        .up();
+                },
+
+                getSenderSubject: function() {
+                    var senderGary34 = {"sender":292836,"sender_avatar":"0||","msgType":"msg","heroStatus":1,"zoneTitle":0,"santa":false,"likeNum":0,"channel":2,"sender_vip":0,"sender_name":"gary34","IsMod":false,"alliance":{"abbr":"","name":"","id":0,"title":0,"color":0,"rank":0},"receiver":"445779","sender_jid":"gateway|wz|292836@chat.pf.tap4fun.com","VipSet":false,"timestamp":1492497895632,"sender_icon":4,"sender_home_server_id":2};
+                    senderGary34.timestamp = Date.now();
+                    return JSON.stringify(senderGary34);
                 },
 
                 sendMessage: function (message) {

@@ -110,7 +110,7 @@
                     // If a custom width is applied (due to drag-resizing),
                     // then we need to set the width of the .chatbox element as well.
                     if (this.model.get('width')) {
-                        this.$el.css('width', this.model.get('width'));
+                        //this.$el.css('width', this.model.get('width'));
                     }
                 },
 
