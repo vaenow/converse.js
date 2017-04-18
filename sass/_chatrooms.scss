@@ -51,12 +51,12 @@
             @media screen and (max-height: $mobile-landscape-height) {
                 height: $mobile-chat-height;
                 width: $mobile-chat-width;
-                height: 100vh;
+                height: $mobile-chat-height-vh;
             }
             @media screen and (max-width: $mobile-portrait-length) {
                 height: $mobile-chat-height;
                 width: $mobile-chat-width;
-                height: 100vh;
+                height: $mobile-chat-height-vh;
             }
             .chatroom-body {
                 height: 289px;

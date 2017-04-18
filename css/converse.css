@@ -1406,11 +1406,13 @@
   @media screen and (max-height: 450px) {
     #converse-embedded-chat .flyout,
     #conversejs .flyout {
-      bottom: 0; } }
+      bottom: 11px;
+      left: 2px; } }
   @media screen and (max-width: 1896px) {
     #converse-embedded-chat .flyout,
     #conversejs .flyout {
-      bottom: 0; } }
+      bottom: 11px;
+      left: 2px; } }
 #converse-embedded-chat .chat-head,
 #conversejs .chat-head {
   border-top-left-radius: 4px;
@@ -1501,13 +1503,13 @@
       #conversejs .chatbox .box-flyout {
         height: 400px;
         width: calc(100vw - 25px);
-        height: 98vh; } }
+        height: calc(100vh - 18px); } }
     @media all and (max-width: 1896px) {
       #converse-embedded-chat .chatbox .box-flyout,
       #conversejs .chatbox .box-flyout {
         height: 400px;
         width: calc(100vw - 25px);
-        height: 98vh; } }
+        height: calc(100vh - 18px); } }
   #converse-embedded-chat .chatbox .chat-title,
   #conversejs .chatbox .chat-title {
     color: white;
@@ -2288,13 +2290,13 @@
       #conversejs .chatroom .box-flyout {
         height: 400px;
         width: calc(100vw - 25px);
-        height: 100vh; } }
+        height: calc(100vh - 18px); } }
     @media screen and (max-width: 1896px) {
       #converse-embedded-chat .chatroom .box-flyout,
       #conversejs .chatroom .box-flyout {
         height: 400px;
         width: calc(100vw - 25px);
-        height: 100vh; } }
+        height: calc(100vh - 18px); } }
     #converse-embedded-chat .chatroom .box-flyout .chatroom-body,
     #conversejs .chatroom .box-flyout .chatroom-body {
       height: 289px;
